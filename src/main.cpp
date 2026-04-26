@@ -124,24 +124,23 @@ static void hook_thread_fn() {
 
 static void SetupGLAttributes() {
 #if defined(__APPLE__) && TARGET_OS_OSX
-    // macOS requires 3.2 Core + forward compatible (though you said no macOS needed)
+    // macOS: 4.1 Core + forward compatible
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
 #else
-    // Windows/Linux: 3.0 Core is sufficient for ImGui
+    // Windows/Linux: 4.5 Core
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 5);
 #endif
 
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
     SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
 
-    // Alpha channel for transparency
     SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
     SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
     SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
@@ -433,7 +432,7 @@ int main(int, char**) {
             continue;
         }
 
-        // IMPORTANT: window needs to be opened after
+        // IMPORTANT: window needs to be opened after taking the screenshot
         if (g_open_requested.exchange(false)) {
             if (!app.window) CreateGLContext(&app);
             if (!app.shot) {
@@ -489,20 +488,16 @@ int main(int, char**) {
         int fb_w, fb_h;
         SDL_GetWindowSizeInPixels(app.window, &fb_w, &fb_h);
 
-        // Setup render state
         glViewport(0, 0, fb_w, fb_h);
 
         glClearColor(0.0f, 0.0f, 0.0f, 0.1f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        // Render ImGui
         ImGui_ImplOpenGL3_RenderDrawData(draw_data);
-
-        // Present
         SDL_GL_SwapWindow(app.window);
     }
 
-    hook_stop();  // signal libuiohook to exit
+    hook_stop();
     if (app.hook_thread.joinable()) app.hook_thread.join();
 
     if (app.window) CloseWindow(&app);

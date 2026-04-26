@@ -5,13 +5,11 @@
 #include <mutex>
 #include <unordered_map>
 #include <vector>
-
 struct Screenshotter {
     SDL_Surface* TakeScreenshot() {
         auto monitors = SL::Screen_Capture::GetMonitors();
         if (monitors.empty()) return nullptr;
 
-        // Per-monitor buffer, populated by the capture callback
         struct MonitorBuf {
             std::vector<uint8_t> pixels;
             int width = 0;
