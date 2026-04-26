@@ -1,0 +1,515 @@
+#include <clip/clip.h>
+#include <inttypes.h>
+#include <stdio.h>
+#include <atomic>
+#include <chrono>
+#include <filesystem>
+#include <format>
+#include <print>
+#include <string>
+#include <thread>
+#include "capture.h"
+#include "graphics.h"
+#include "input.h"
+#include "textures.h"
+
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+
+namespace fs = std::filesystem;
+
+constexpr ImVec2 inv_pos = {FLT_MIN, FLT_MIN};
+
+struct App {
+    SDL_Window* window = nullptr;
+    SDL_GLContext gl_context = nullptr;
+    bool running = true;
+    bool pending_close = false;
+    std::thread hook_thread;
+    SDL_Surface* shot = nullptr;
+    ImTextureID shot_tex = -1;
+    SDL_Tray* tray = nullptr;
+    SDL_Surface* icon = nullptr;
+
+    ImVec2 start, drag = inv_pos;
+    bool dragging = false;
+};
+
+static std::atomic<bool> g_open_requested{false};
+static std::string g_last_screenshot_path;
+
+bool ensure_dir(const std::string& path) {
+    std::error_code ec;
+
+    if (fs::exists(path, ec)) {
+        if (fs::is_directory(path, ec)) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    if (ec && ec != std::errc::no_such_file_or_directory) { return false; }
+
+    ec.clear();
+    if (fs::create_directories(path, ec)) { return true; }
+
+    return !ec;
+}
+
+bool logger_proc(unsigned int level, const char* format, ...) {
+    bool status = false;
+
+    va_list args;
+    switch (level) {
+        case LOG_LEVEL_INFO:
+            printf("[INFO] ");
+            status = vfprintf(stdout, format, args) >= 0;
+            break;
+        case LOG_LEVEL_WARN:
+            fprintf(stderr, "[WARN] ");
+            status = vfprintf(stderr, format, args) >= 0;
+            break;
+        case LOG_LEVEL_ERROR:
+            fprintf(stderr, "[ERROR] ");
+            status = vfprintf(stderr, format, args) >= 0;
+            break;
+    }
+
+    return status;
+}
+
+// this is fucked, i have to track the mask myself
+static void uiohook_dispatch(uiohook_event* const event) {
+    static bool shift_down = false;
+    static bool alt_down = false;
+    static bool ctrl_down = false;
+
+    if (event->type == EVENT_KEY_PRESSED || event->type == EVENT_KEY_RELEASED) {
+        bool pressed = (event->type == EVENT_KEY_PRESSED);
+
+        switch (event->data.keyboard.keycode) {
+            case VC_SHIFT_L:
+            case VC_SHIFT_R:
+                shift_down = pressed;
+                break;
+
+            case VC_ALT_L:
+            case VC_ALT_R:
+                alt_down = pressed;
+                break;
+
+            case VC_CONTROL_L:
+            case VC_CONTROL_R:
+                ctrl_down = pressed;
+                break;
+        }
+    }
+
+    if (event->type == EVENT_KEY_PRESSED) {
+        if (event->data.keyboard.keycode == VC_S && shift_down && alt_down && !ctrl_down) {
+            logger_proc(LOG_LEVEL_INFO, "open\n");
+            g_open_requested.store(true);
+        }
+    }
+}
+
+static void hook_thread_fn() {
+    hook_set_logger_proc(&logger_proc);
+    hook_set_dispatch_proc(&uiohook_dispatch);
+    int status = hook_run();  // blocks until hook_stop()
+    if (status != UIOHOOK_SUCCESS) { fprintf(stderr, "libuiohook error: %d\n", status); }
+}
+
+static void SetupGLAttributes() {
+#if defined(__APPLE__) && TARGET_OS_OSX
+    // macOS requires 3.2 Core + forward compatible (though you said no macOS needed)
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+#else
+    // Windows/Linux: 3.0 Core is sufficient for ImGui
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+#endif
+
+    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+
+    // Alpha channel for transparency
+    SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
+    SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
+    SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
+    SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
+}
+
+static bool CreateGLContext(App* app) {
+    if (app->gl_context) return true;
+
+    float dpi = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
+    int w = (int)(1280 * dpi);
+    int h = (int)(720 * dpi);
+
+    SDL_WindowFlags flags = SDL_WINDOW_OPENGL | SDL_WINDOW_HIGH_PIXEL_DENSITY |
+                            SDL_WINDOW_ALWAYS_ON_TOP | SDL_WINDOW_BORDERLESS |
+                            SDL_WINDOW_TRANSPARENT | SDL_WINDOW_UTILITY | SDL_WINDOW_HIDDEN;
+
+    app->window = SDL_CreateWindow("kadr", w, h, flags);
+    if (!app->window) {
+        SDL_Log("Failed to create window: %s", SDL_GetError());
+        return false;
+    }
+
+    app->gl_context = SDL_GL_CreateContext(app->window);
+    if (!app->gl_context) {
+        SDL_Log("Failed to create GL context: %s", SDL_GetError());
+        SDL_DestroyWindow(app->window);
+        app->window = nullptr;
+        return false;
+    }
+
+    SDL_GL_MakeCurrent(app->window, app->gl_context);
+    SDL_GL_SetSwapInterval(1);
+
+    ImGui_ImplSDL3_InitForOpenGL(app->window, app->gl_context);
+    ImGui_ImplOpenGL3_Init();
+
+    logger_proc(LOG_LEVEL_INFO, "OpenGL context created and ImGui initialized.\n");
+
+    return true;
+}
+
+static bool OpenWindow(App* app) {
+    if (!app->window) {
+        SDL_Log("Window does not exist. Create GL context first.");
+        return false;
+    }
+
+    int num_displays;
+    SDL_DisplayID* displays = SDL_GetDisplays(&num_displays);
+
+    if (displays && num_displays > 0) {
+        int min_x = INT_MAX, min_y = INT_MAX;
+        int max_x = INT_MIN, max_y = INT_MIN;
+
+        for (int i = 0; i < num_displays; i++) {
+            SDL_Rect bounds;
+            if (SDL_GetDisplayBounds(displays[i], &bounds)) {
+                if (bounds.x < min_x) min_x = bounds.x;
+                if (bounds.y < min_y) min_y = bounds.y;
+                if (bounds.x + bounds.w > max_x) max_x = bounds.x + bounds.w;
+                if (bounds.y + bounds.h > max_y) max_y = bounds.y + bounds.h;
+            }
+        }
+
+        SDL_SetWindowPosition(app->window, min_x, min_y);
+        SDL_SetWindowSize(app->window, max_x - min_x, max_y - min_y);
+
+        SDL_free(displays);
+    } else {
+        SDL_SetWindowPosition(app->window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+    }
+
+    SDL_ShowWindow(app->window);
+    SDL_RaiseWindow(app->window);
+
+    logger_proc(LOG_LEVEL_INFO, "Window opened.\n");
+
+    return true;
+}
+
+static void CloseWindow(App* app) {
+    if (!app->window) return;
+
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplSDL3_Shutdown();
+
+    if (app->gl_context) {
+        SDL_GL_DestroyContext(app->gl_context);
+        app->gl_context = nullptr;
+    }
+
+    SDL_DestroyWindow(app->window);
+    app->window = nullptr;
+}
+
+void save_screen(App* app, bool crop) {
+    if (!app->shot) return;
+    ensure_dir("screenshots");
+    auto now = std::chrono::system_clock::now();
+    auto stamp = std::format("{:%F_%H-%M-%S}", now);
+    auto path = std::format("screenshots{}kadr_screenshot_{}.png",
+        std::string(1, fs::path::preferred_separator),
+        stamp);
+
+    bool saved = false;
+
+    if (crop) {
+        SDL_Rect src_rect;
+        src_rect.x = (int)((app->start.x < app->drag.x) ? app->start.x : app->drag.x);
+        src_rect.y = (int)((app->start.y < app->drag.y) ? app->start.y : app->drag.y);
+        src_rect.w = (int)abs(app->drag.x - app->start.x);
+        src_rect.h = (int)abs(app->drag.y - app->start.y);
+
+        if (src_rect.w == 0 || src_rect.h == 0) return;
+
+        SDL_Surface* save = SDL_CreateSurface(src_rect.w, src_rect.h, app->shot->format);
+        if (!save) {
+            SDL_Log("Failed to create surface: %s", SDL_GetError());
+            return;
+        }
+
+        if (!SDL_BlitSurface(app->shot, &src_rect, save, nullptr)) {
+            SDL_Log("Screenshot cropping failed: %s", SDL_GetError());
+            SDL_DestroySurface(save);
+            return;
+        }
+
+        saved = SDL_SavePNG(save, path.c_str());
+        if (!saved) { SDL_Log("failed to save to file: %s", SDL_GetError()); }
+        SDL_DestroySurface(save);
+    } else {
+        saved = SDL_SavePNG(app->shot, path.c_str());
+        if (!saved) { SDL_Log("failed to save to file: %s", SDL_GetError()); }
+    }
+
+    if (saved) {
+        g_last_screenshot_path = path;
+        SDL_Log("Screenshot saved: %s", path.c_str());
+    }
+}
+
+static bool copy_surface_to_clipboard(SDL_Surface* surface) {
+    if (!surface) return false;
+
+    SDL_Surface* rgba = SDL_ConvertSurface(surface, SDL_PIXELFORMAT_RGBA32);
+    if (!rgba) {
+        SDL_Log("Failed to convert surface for clipboard: %s", SDL_GetError());
+        return false;
+    }
+
+    clip::image_spec spec;
+    spec.width = static_cast<unsigned long>(rgba->w);
+    spec.height = static_cast<unsigned long>(rgba->h);
+    spec.bits_per_pixel = 32;
+    spec.bytes_per_row = static_cast<unsigned long>(rgba->pitch);
+
+    SDL_PixelFormatDetails const* fmt = SDL_GetPixelFormatDetails(rgba->format);
+
+    spec.red_mask = fmt->Rmask;
+    spec.green_mask = fmt->Gmask;
+    spec.blue_mask = fmt->Bmask;
+    spec.alpha_mask = fmt->Amask;
+
+    spec.red_shift = fmt->Rshift;
+    spec.green_shift = fmt->Gshift;
+    spec.blue_shift = fmt->Bshift;
+    spec.alpha_shift = fmt->Ashift;
+
+    clip::image img(rgba->pixels, spec);
+    bool ok = clip::set_image(img);
+
+    SDL_DestroySurface(rgba);
+
+    if (ok) {
+        SDL_Log("Copied screenshot to clipboard");
+    } else {
+        SDL_Log("Failed to copy screenshot to clipboard");
+    }
+    return ok;
+}
+
+static bool copy_screenshot_to_clipboard(App* app) {
+    if (!app->shot) return false;
+
+    SDL_Surface* src = app->shot;
+    SDL_Surface* cropped = nullptr;
+
+    if (app->start != app->drag) {
+        SDL_Rect src_rect;
+        src_rect.x = (int)((app->start.x < app->drag.x) ? app->start.x : app->drag.x);
+        src_rect.y = (int)((app->start.y < app->drag.y) ? app->start.y : app->drag.y);
+        src_rect.w = (int)abs(app->drag.x - app->start.x);
+        src_rect.h = (int)abs(app->drag.y - app->start.y);
+
+        if (src_rect.w > 0 && src_rect.h > 0) {
+            cropped = SDL_CreateSurface(src_rect.w, src_rect.h, app->shot->format);
+            if (cropped && SDL_BlitSurface(app->shot, &src_rect, cropped, nullptr)) {
+                src = cropped;
+            } else {
+                if (cropped) SDL_DestroySurface(cropped);
+                cropped = nullptr;
+            }
+        }
+    }
+
+    bool result = copy_surface_to_clipboard(src);
+    if (cropped) SDL_DestroySurface(cropped);
+    return result;
+}
+
+void callback_quit(void* userdata, SDL_TrayEntry* entry) {
+    SDL_Event event;
+    event.type = SDL_EVENT_QUIT;
+    SDL_PushEvent(&event);
+}
+
+int main(int, char**) {
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
+        fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
+        return -1;
+    }
+
+    SetupGLAttributes();
+
+    App app = {};
+
+    app.icon = SDL_LoadPNG("assets/kadr_icon.png");
+
+    app.tray = SDL_CreateTray(app.icon, "kadr");
+
+    SDL_TrayMenu* menu = SDL_CreateTrayMenu(app.tray);
+    SDL_TrayEntry* entry = SDL_InsertTrayEntryAt(menu, -1, "Quit", SDL_TRAYENTRY_BUTTON);
+
+    SDL_SetTrayEntryCallback(entry, callback_quit, NULL);
+
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+
+    app.hook_thread = std::thread(hook_thread_fn);
+
+    while (app.running) {
+        SDL_Event e;
+        while (SDL_PollEvent(&e)) {
+            if (app.window) ImGui_ImplSDL3_ProcessEvent(&e);
+
+            if (e.type == SDL_EVENT_QUIT) {
+                app.running = false;
+            } else if (e.type == SDL_EVENT_KEY_DOWN && app.window && e.key.key == SDLK_ESCAPE) {
+                app.pending_close = true;
+            }
+
+            if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+                if (e.button.button == SDL_BUTTON_LEFT) {
+                    app.start = {e.button.x, e.button.y};
+                    app.dragging = true;
+                } else if (e.button.button == SDL_BUTTON_RIGHT) {
+                    app.dragging = false;
+                    app.start = inv_pos;
+                    app.drag = inv_pos;
+                }
+            } else if (e.type == SDL_EVENT_MOUSE_BUTTON_UP && e.button.button == SDL_BUTTON_LEFT) {
+                app.dragging = false;
+                save_screen(&app, app.start != app.drag);
+
+                copy_screenshot_to_clipboard(&app);
+
+                app.start = inv_pos;
+                app.drag = inv_pos;
+
+                app.pending_close = true;
+            }
+        }
+
+        if (app.dragging) {
+            float x, y;
+            SDL_GetMouseState(&x, &y);
+            app.drag = {x, y};
+        }
+
+        if (app.pending_close) {
+            app.pending_close = false;
+            SDL_DestroySurface(app.shot);
+            app.shot = nullptr;
+            destroy_tex(app.shot_tex);
+            CloseWindow(&app);
+            continue;
+        }
+
+        // IMPORTANT: window needs to be opened after
+        if (g_open_requested.exchange(false)) {
+            if (!app.window) CreateGLContext(&app);
+            if (!app.shot) {
+                app.shot = Screenshotter().TakeScreenshot();
+                app.shot_tex = surface_to_imgui(app.shot);
+            }
+            if (app.window) OpenWindow(&app);
+        }
+
+        if (!app.window) {
+            SDL_Delay(20);  // idle while hidden
+            continue;
+        }
+
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplSDL3_NewFrame();
+        ImGui::NewFrame();
+
+        // ImGui::Begin("Window");
+        // ImGui::Text("ESC   -> hide window");
+        // ImGui::Text("Alt+Shift+S -> show window (global)");
+        // ImGui::End();
+
+        if (app.shot) {
+            auto shade = IM_COL32(0, 0, 0, 80);
+            auto* bg = ImGui::GetBackgroundDrawList();
+            ImVec2 p_min = {0, 0};
+            ImVec2 p_max = {(float)app.shot->w, (float)app.shot->h};
+            bg->AddImage(ImTextureRef(app.shot_tex), p_min, p_max);
+
+            if (app.dragging) {
+                ImVec2 r_min = ImMin(app.start, app.drag);
+                ImVec2 r_max = ImMax(app.start, app.drag);
+
+                bg->AddRectFilled({0, 0}, {p_max.x, r_min.y}, shade);
+                bg->AddRectFilled({0, r_max.y}, {p_max.x, p_max.y}, shade);
+                bg->AddRectFilled({0, r_min.y}, {r_min.x, r_max.y}, shade);
+                bg->AddRectFilled({r_max.x, r_min.y}, {p_max.x, r_max.y}, shade);
+            } else {
+                bg->AddRectFilled(p_min, p_max, shade);
+            }
+        }
+
+        if (app.dragging) {
+            auto white = IM_COL32(255, 255, 255, 255);
+            auto* fg = ImGui::GetForegroundDrawList();
+            fg->AddRect(app.start, app.drag, white);
+        }
+
+        ImGui::Render();
+        ImDrawData* draw_data = ImGui::GetDrawData();
+
+        int fb_w, fb_h;
+        SDL_GetWindowSizeInPixels(app.window, &fb_w, &fb_h);
+
+        // Setup render state
+        glViewport(0, 0, fb_w, fb_h);
+
+        glClearColor(0.0f, 0.0f, 0.0f, 0.1f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        // Render ImGui
+        ImGui_ImplOpenGL3_RenderDrawData(draw_data);
+
+        // Present
+        SDL_GL_SwapWindow(app.window);
+    }
+
+    hook_stop();  // signal libuiohook to exit
+    if (app.hook_thread.joinable()) app.hook_thread.join();
+
+    if (app.window) CloseWindow(&app);
+
+    ImGui::DestroyContext();
+    SDL_DestroyTray(app.tray);
+    SDL_DestroySurface(app.icon);
+    SDL_Quit();
+    return 0;
+}
