@@ -1,0 +1,156 @@
+#include "settings_ui.h"
+#include <magic_enum_all.hpp>
+#include <ranges>
+#include "config.h"
+#include "input.h"
+
+static std::string format_combo(const KeyCombo* combo, bool capturing) {
+    if (capturing) {
+        const auto& peak = keybinds_capture_peak();
+        if (peak.empty()) return "[press keys...]";
+        std::string s;
+        for (size_t i = 0; i < peak.size(); ++i) {
+            if (i) s += " + ";
+            const char* name = keycode_name(peak[i]);
+            s += name ? name : "?";
+        }
+        return s;
+    }
+    if (!combo || combo->required.empty()) return "[click to bind]";
+    std::string s;
+    for (size_t i = 0; i < combo->required.size(); ++i) {
+        if (i) s += " + ";
+        const char* name = keycode_name(combo->required[i]);
+        s += name ? name : "?";
+    }
+    return s;
+}
+
+void settings_ui(App* app) {
+    constexpr float TITLE_H = 32.0f;
+    ImVec2 win_size = ImGui::GetIO().DisplaySize;
+    auto* bg = ImGui::GetBackgroundDrawList();
+
+    // --- titlebar background ---
+    bg->AddRectFilled({0, 0},
+        {win_size.x, TITLE_H},
+        ImGui::ColorConvertFloat4ToU32(ImGui::GetStyle().Colors[ImGuiCol_MenuBarBg]));
+    bg->AddText({12, (TITLE_H - ImGui::GetTextLineHeight()) * 0.5f},
+        IM_COL32(220, 220, 220, 255),
+        "kadr | settings");
+
+    ImGui::SetNextWindowPos({0, 0});
+    ImGui::SetNextWindowSize({win_size.x, TITLE_H});
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
+    ImGui::Begin("##titlebar",
+        nullptr,
+        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
+            ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoBringToFrontOnFocus);
+
+    ImGui::SetCursorPos({0, 0});
+    ImGui::InvisibleButton("##drag_handle", {win_size.x - TITLE_H, TITLE_H});
+
+    static int dragOffsetX, dragOffsetY;
+
+    if (ImGui::IsItemHovered()) { ImGui::SetMouseCursor(ImGuiMouseCursor_Hand); }
+
+    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && ImGui::IsItemHovered()) {
+        float mouseInWindowX, mouseInWindowY;
+        SDL_GetMouseState(&mouseInWindowX, &mouseInWindowY);
+        dragOffsetX = (int)mouseInWindowX;
+        dragOffsetY = (int)mouseInWindowY;
+    }
+
+    if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+        float globalMouseX, globalMouseY;
+        SDL_GetGlobalMouseState(&globalMouseX, &globalMouseY);
+
+        SDL_SetWindowPosition(
+            app->window, (int)globalMouseX - dragOffsetX, (int)globalMouseY - dragOffsetY);
+    }
+
+    // close button — top right, fires a clean close without the SC teardown path
+    ImGui::SetCursorPos({win_size.x - TITLE_H, 0});
+    ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(196, 43, 28, 255));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(160, 30, 20, 255));
+    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(220, 220, 220, 255));
+    if (ImGui::Button("x", {TITLE_H, TITLE_H})) { app->pending_close = true; }
+    ImGui::PopStyleColor(4);
+
+    ImGui::End();
+    ImGui::PopStyleVar();
+
+    // --- settings content ---
+    ImGui::SetNextWindowPos({0, TITLE_H});
+    ImGui::SetNextWindowSize({win_size.x, win_size.y - TITLE_H});
+    ImGui::SetNextWindowBgAlpha(1.0f);
+    ImGui::Begin("##settings_content",
+        nullptr,
+        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+            ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBringToFrontOnFocus);
+
+    ImGui::SeparatorText("capture");
+    if (ImGui::Checkbox("copy to clipboard after capture", &cfg.copy_to_clipboard))
+        config_save("kadr_config.json");
+    if (ImGui::Checkbox("save to disk after capture", &cfg.save_to_disk))
+        config_save("kadr_config.json");
+
+    ImGui::SeparatorText("output");
+    ImGui::SetNextItemWidth(300);
+    if (ImGui::InputText("save folder", &cfg.save_path)) config_save("kadr_config.json");
+
+    ImGui::SeparatorText("hotkeys");
+
+    for (auto action : magic_enum::enum_values<Action>()) {
+        if (action == Action::NONE || action == Action::COUNT || action == Action::CLOSE_WINDOW)
+            continue;
+
+        ImGui::PushID(static_cast<int>(action));
+
+        ImGui::Text("%s", action_name(action));
+        ImGui::SameLine(180);
+
+        bool is_capturing = keybinds_is_capturing() && keybinds_capture_target() == action;
+        const KeyCombo* combo = keybinds_get_combo(action);
+        std::string label = format_combo(combo, is_capturing);
+
+        if (is_capturing) {
+            ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(80, 120, 80, 255));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(100, 150, 100, 255));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(80, 120, 80, 255));
+        }
+
+        if (ImGui::Button(label.c_str(), {200, 0})) {
+            if (is_capturing) {
+                keybinds_cancel_capture();
+            } else {
+                keybinds_start_capture(action);
+            }
+        }
+
+        if (is_capturing) {
+            ImGui::PopStyleColor(3);
+            ImGui::SameLine();
+            ImGui::TextDisabled("[press combo, release to set]");
+        }
+
+        // unbind button if bound
+        if (combo && !combo->required.empty() && !is_capturing) {
+            ImGui::SameLine();
+            if (ImGui::SmallButton("x")) { keybinds_unbind(action); }
+        }
+
+        ImGui::PopID();
+    }
+
+    if (keybinds_is_capturing() && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+        keybinds_cancel_capture();
+    }
+
+    ImGui::SeparatorText("behaviour");
+    if (ImGui::Checkbox("start on login", &cfg.start_on_login)) config_save("kadr_config.json");
+
+    ImGui::End();
+}

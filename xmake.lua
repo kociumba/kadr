@@ -5,13 +5,19 @@ includes("@builtin/xpack")
 
 add_requires("libuiohook", {configs = {shared = true}})
 add_requires("imgui", {configs = {opengl3 = true, sdl3 = true, freetype = true}})
-add_requires("opengl", "screen_capture_lite", "clip")
+add_requires("opengl", "screen_capture_lite", "clip", "magic_enum", "nlohmann_json")
 
 target("kadr")
     set_kind("binary")
     add_files("src/**.cpp", "assets/resources.rc")
     add_headerfiles("src/**.h")
-    add_packages("libuiohook", "imgui", "opengl", "screen_capture_lite", "clip")
+    add_packages("libuiohook",
+        "imgui",
+        "opengl",
+        "screen_capture_lite",
+        "clip",
+        "magic_enum",
+        "nlohmann_json")
 
     add_extrafiles("assets/**")
 

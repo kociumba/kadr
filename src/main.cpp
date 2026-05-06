@@ -9,8 +9,12 @@
 #include <string>
 #include <thread>
 #include "capture.h"
+#include "config.h"
+#include "globals.h"
 #include "graphics.h"
 #include "input.h"
+#include "reflection.h"
+#include "settings_ui.h"
 #include "textures.h"
 
 #if defined(__APPLE__)
@@ -19,24 +23,11 @@
 
 namespace fs = std::filesystem;
 
-constexpr ImVec2 inv_pos = {FLT_MIN, FLT_MIN};
+CFG cfg = {};
 
-struct App {
-    SDL_Window* window = nullptr;
-    SDL_GLContext gl_context = nullptr;
-    bool running = true;
-    bool pending_close = false;
-    std::thread hook_thread;
-    SDL_Surface* shot = nullptr;
-    ImTextureID shot_tex = -1;
-    SDL_Tray* tray = nullptr;
-    SDL_Surface* icon = nullptr;
-
-    ImVec2 start, drag = inv_pos;
-    bool dragging = false;
-};
-
-static std::atomic<bool> g_open_requested{false};
+static std::atomic g_open_requested_sc{false};
+static std::atomic g_open_requested_settings{false};
+static std::atomic g_close_requested{false};
 static std::string g_last_screenshot_path;
 
 bool ensure_dir(const std::string& path) {
@@ -82,35 +73,30 @@ bool logger_proc(unsigned int level, const char* format, ...) {
 
 // this is fucked, i have to track the mask myself
 static void uiohook_dispatch(uiohook_event* const event) {
-    static bool shift_down = false;
-    static bool alt_down = false;
-    static bool ctrl_down = false;
+    keybinds_on_event(event);
 
-    if (event->type == EVENT_KEY_PRESSED || event->type == EVENT_KEY_RELEASED) {
-        bool pressed = (event->type == EVENT_KEY_PRESSED);
-
-        switch (event->data.keyboard.keycode) {
-            case VC_SHIFT_L:
-            case VC_SHIFT_R:
-                shift_down = pressed;
-                break;
-
-            case VC_ALT_L:
-            case VC_ALT_R:
-                alt_down = pressed;
-                break;
-
-            case VC_CONTROL_L:
-            case VC_CONTROL_R:
-                ctrl_down = pressed;
-                break;
-        }
-    }
-
+    if (keybinds_is_capturing()) return;
     if (event->type == EVENT_KEY_PRESSED) {
-        if (event->data.keyboard.keycode == VC_S && shift_down && alt_down && !ctrl_down) {
-            logger_proc(LOG_LEVEL_INFO, "open\n");
-            g_open_requested.store(true);
+        switch (keybinds_poll()) {
+            case Action::TAKE_SCREENSHOT:
+                SDL_Log("screenshot triggered\n");
+                g_open_requested_sc.store(true);
+                break;
+            case Action::OPEN_SETTINGS:
+                SDL_Log("settings opened\n");
+                g_open_requested_settings.store(true);
+                break;
+            case Action::CLOSE_WINDOW:
+                SDL_Log("window close requested\n");
+                g_close_requested.store(true);
+                break;
+            case Action::QUIT_KADR:
+                SDL_Event quit_event;
+                quit_event.type = SDL_EVENT_QUIT;
+                SDL_PushEvent(&quit_event);
+                break;
+            default:
+                break;
         }
     }
 }
@@ -147,18 +133,43 @@ static void SetupGLAttributes() {
     SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
 }
 
-static bool CreateGLContext(App* app) {
+struct WindowConfig {
+    const char* title;
+    int w, h;
+    SDL_WindowFlags flags;
+    bool fullscreen_span;
+};
+
+static WindowConfig GetWindowConfig(KadrMode mode) {
+    float dpi = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
+
+    switch (mode) {
+        case SC:
+            return {"kadr | screenshot",
+                (int)(1280 * dpi),
+                (int)(720 * dpi),
+                SDL_WINDOW_OPENGL | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_ALWAYS_ON_TOP |
+                    SDL_WINDOW_BORDERLESS | SDL_WINDOW_TRANSPARENT | SDL_WINDOW_UTILITY |
+                    SDL_WINDOW_HIDDEN,
+                true};
+        case SETTINGS:
+            return {"kadr | settings",
+                (int)(640 * dpi),
+                (int)(480 * dpi),
+                SDL_WINDOW_OPENGL | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_BORDERLESS |
+                    SDL_WINDOW_HIDDEN,
+                false};
+        default:
+            return {};
+    }
+}
+
+static bool CreateGLContext(App* app, KadrMode mode) {
     if (app->gl_context) return true;
 
-    float dpi = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
-    int w = (int)(1280 * dpi);
-    int h = (int)(720 * dpi);
+    WindowConfig cfg = GetWindowConfig(mode);
 
-    SDL_WindowFlags flags = SDL_WINDOW_OPENGL | SDL_WINDOW_HIGH_PIXEL_DENSITY |
-                            SDL_WINDOW_ALWAYS_ON_TOP | SDL_WINDOW_BORDERLESS |
-                            SDL_WINDOW_TRANSPARENT | SDL_WINDOW_UTILITY | SDL_WINDOW_HIDDEN;
-
-    app->window = SDL_CreateWindow("kadr", w, h, flags);
+    app->window = SDL_CreateWindow(cfg.title, cfg.w, cfg.h, cfg.flags);
     if (!app->window) {
         SDL_Log("Failed to create window: %s", SDL_GetError());
         return false;
@@ -178,47 +189,54 @@ static bool CreateGLContext(App* app) {
     ImGui_ImplSDL3_InitForOpenGL(app->window, app->gl_context);
     ImGui_ImplOpenGL3_Init();
 
+    app->mode = mode;
     logger_proc(LOG_LEVEL_INFO, "OpenGL context created and ImGui initialized.\n");
-
     return true;
 }
 
-static bool OpenWindow(App* app) {
+static bool OpenWindow(App* app, KadrMode mode) {
     if (!app->window) {
-        SDL_Log("Window does not exist. Create GL context first.");
+        SDL_Log("Window does not exist. Call CreateGLContext first.");
         return false;
     }
 
-    int num_displays;
-    SDL_DisplayID* displays = SDL_GetDisplays(&num_displays);
+    WindowConfig cfg = GetWindowConfig(mode);
 
-    if (displays && num_displays > 0) {
-        int min_x = INT_MAX, min_y = INT_MAX;
-        int max_x = INT_MIN, max_y = INT_MIN;
+    if (cfg.fullscreen_span) {
+        int num_displays;
+        SDL_DisplayID* displays = SDL_GetDisplays(&num_displays);
 
-        for (int i = 0; i < num_displays; i++) {
-            SDL_Rect bounds;
-            if (SDL_GetDisplayBounds(displays[i], &bounds)) {
-                if (bounds.x < min_x) min_x = bounds.x;
-                if (bounds.y < min_y) min_y = bounds.y;
-                if (bounds.x + bounds.w > max_x) max_x = bounds.x + bounds.w;
-                if (bounds.y + bounds.h > max_y) max_y = bounds.y + bounds.h;
+        if (displays && num_displays > 0) {
+            int min_x = INT_MAX, min_y = INT_MAX;
+            int max_x = INT_MIN, max_y = INT_MIN;
+
+            for (int i = 0; i < num_displays; i++) {
+                SDL_Rect bounds;
+                if (SDL_GetDisplayBounds(displays[i], &bounds)) {
+                    if (bounds.x < min_x) min_x = bounds.x;
+                    if (bounds.y < min_y) min_y = bounds.y;
+                    if (bounds.x + bounds.w > max_x) max_x = bounds.x + bounds.w;
+                    if (bounds.y + bounds.h > max_y) max_y = bounds.y + bounds.h;
+                }
             }
+
+            SDL_SetWindowPosition(app->window, min_x, min_y);
+            SDL_SetWindowSize(app->window, max_x - min_x, max_y - min_y);
+            SDL_free(displays);
+        } else {
+            SDL_SetWindowPosition(app->window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
         }
-
-        SDL_SetWindowPosition(app->window, min_x, min_y);
-        SDL_SetWindowSize(app->window, max_x - min_x, max_y - min_y);
-
-        SDL_free(displays);
     } else {
         SDL_SetWindowPosition(app->window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+        SDL_SetWindowSize(app->window, cfg.w, cfg.h);
     }
 
     SDL_ShowWindow(app->window);
     SDL_RaiseWindow(app->window);
 
-    logger_proc(LOG_LEVEL_INFO, "Window opened.\n");
-
+    app->mode = mode;
+    std::string name = std::string(magic_enum::enum_name(mode));
+    logger_proc(LOG_LEVEL_INFO, "Window opened in mode %s.\n", name.c_str());
     return true;
 }
 
@@ -235,6 +253,7 @@ static void CloseWindow(App* app) {
 
     SDL_DestroyWindow(app->window);
     app->window = nullptr;
+    app->mode = IDLE;
 }
 
 void save_screen(App* app, bool crop) {
@@ -358,11 +377,36 @@ void callback_quit(void* userdata, SDL_TrayEntry* entry) {
     SDL_PushEvent(&event);
 }
 
+static void TransitionToSC(App* app) {
+    if (!app->window) CreateGLContext(app, SC);
+    if (!app->shot) {
+        app->shot = Screenshotter().TakeScreenshot();
+        app->shot_tex = surface_to_imgui(app->shot);
+    }
+    if (app->window) OpenWindow(app, SC);
+}
+
+static void TransitionToSettings(App* app) {
+    if (!app->window) CreateGLContext(app, SETTINGS);
+    if (app->window) OpenWindow(app, SETTINGS);
+}
+
 int main(int, char**) {
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return -1;
     }
+
+    init_keybinds();
+    keybinds_set_changed_callback([] { config_save("kadr_config.json"); });
+
+    keybinds_bind(Action::TAKE_SCREENSHOT, combo({VC_ALT_L, VC_SHIFT_L, VC_S}));
+    keybinds_bind(Action::OPEN_SETTINGS, combo({VC_F7}));
+    keybinds_bind(Action::CLOSE_WINDOW, combo({VC_ESCAPE}));
+    keybinds_bind(Action::QUIT_KADR, combo({VC_CONTROL_L, VC_SHIFT_L, VC_E}));
+
+    // keybinds_load("kadr.kbd");
+    config_load("kadr_config.json");
 
     SetupGLAttributes();
 
@@ -373,13 +417,24 @@ int main(int, char**) {
     app.tray = SDL_CreateTray(app.icon, "kadr");
 
     SDL_TrayMenu* menu = SDL_CreateTrayMenu(app.tray);
-    SDL_TrayEntry* entry = SDL_InsertTrayEntryAt(menu, -1, "Quit", SDL_TRAYENTRY_BUTTON);
 
-    SDL_SetTrayEntryCallback(entry, callback_quit, NULL);
+    SDL_TrayEntry* settings_entry =
+        SDL_InsertTrayEntryAt(menu, -1, "Settings", SDL_TRAYENTRY_BUTTON);
+    SDL_SetTrayEntryCallback(
+        settings_entry,
+        [](void* ud, SDL_TrayEntry*) {
+            ((App*)ud)->mode = SETTINGS;
+            TransitionToSettings((App*)ud);
+        },
+        &app);
+
+    SDL_TrayEntry* quit_entry = SDL_InsertTrayEntryAt(menu, -1, "Quit", SDL_TRAYENTRY_BUTTON);
+    SDL_SetTrayEntryCallback(quit_entry, callback_quit, NULL);
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGui::StyleColorsDark();
+    // ImGui::StyleColorsDark();
+    set_theme_kadr_dark();
     ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
     app.hook_thread = std::thread(hook_thread_fn);
@@ -391,31 +446,36 @@ int main(int, char**) {
 
             if (e.type == SDL_EVENT_QUIT) {
                 app.running = false;
-            } else if (e.type == SDL_EVENT_KEY_DOWN && app.window && e.key.key == SDLK_ESCAPE) {
-                app.pending_close = true;
-            }
+            }  // else if (e.type == SDL_EVENT_KEY_DOWN && app.window && e.key.key == SDLK_ESCAPE) {
+            //     app.pending_close = true;
+            // }
 
-            if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
-                if (e.button.button == SDL_BUTTON_LEFT) {
-                    app.start = {e.button.x, e.button.y};
-                    app.dragging = true;
-                } else if (e.button.button == SDL_BUTTON_RIGHT) {
+            if (app.mode == SC) {
+                if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+                    if (e.button.button == SDL_BUTTON_LEFT) {
+                        app.start = {e.button.x, e.button.y};
+                        app.dragging = true;
+                    } else if (e.button.button == SDL_BUTTON_RIGHT) {
+                        app.dragging = false;
+                        app.start = inv_pos;
+                        app.drag = inv_pos;
+                    }
+                } else if (e.type == SDL_EVENT_MOUSE_BUTTON_UP &&
+                           e.button.button == SDL_BUTTON_LEFT) {
                     app.dragging = false;
+                    save_screen(&app, app.start != app.drag);
+
+                    copy_screenshot_to_clipboard(&app);
+
                     app.start = inv_pos;
                     app.drag = inv_pos;
+
+                    app.pending_close = true;
                 }
-            } else if (e.type == SDL_EVENT_MOUSE_BUTTON_UP && e.button.button == SDL_BUTTON_LEFT) {
-                app.dragging = false;
-                save_screen(&app, app.start != app.drag);
-
-                copy_screenshot_to_clipboard(&app);
-
-                app.start = inv_pos;
-                app.drag = inv_pos;
-
-                app.pending_close = true;
             }
         }
+
+        if (g_close_requested.exchange(false)) { app.pending_close = true; }
 
         if (app.dragging) {
             float x, y;
@@ -424,6 +484,7 @@ int main(int, char**) {
         }
 
         if (app.pending_close) {
+            app.mode = IDLE;
             app.pending_close = false;
             SDL_DestroySurface(app.shot);
             app.shot = nullptr;
@@ -433,16 +494,25 @@ int main(int, char**) {
         }
 
         // IMPORTANT: window needs to be opened after taking the screenshot
-        if (g_open_requested.exchange(false)) {
-            if (!app.window) CreateGLContext(&app);
-            if (!app.shot) {
-                app.shot = Screenshotter().TakeScreenshot();
-                app.shot_tex = surface_to_imgui(app.shot);
-            }
-            if (app.window) OpenWindow(&app);
+        if (g_open_requested_sc.exchange(false)) {
+            if (app.mode == SETTINGS) CloseWindow(&app);
+            app.mode = SC;
+            TransitionToSC(&app);
+            // if (!app.window) CreateGLContext(&app);
+            // if (!app.shot) {
+            //     app.shot = Screenshotter().TakeScreenshot();
+            //     app.shot_tex = surface_to_imgui(app.shot);
+            // }
+            // if (app.window) OpenWindow(&app);
         }
 
-        if (!app.window) {
+        if (g_open_requested_settings.exchange(false)) {
+            if (app.mode == SC) CloseWindow(&app);
+            app.mode = SETTINGS;
+            TransitionToSettings(&app);
+        }
+
+        if (!app.window || app.mode == IDLE) {
             SDL_Delay(20);  // idle while hidden
             continue;
         }
@@ -451,35 +521,34 @@ int main(int, char**) {
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
 
-        // ImGui::Begin("Window");
-        // ImGui::Text("ESC   -> hide window");
-        // ImGui::Text("Alt+Shift+S -> show window (global)");
-        // ImGui::End();
+        if (app.mode == SC) {
+            if (app.shot) {
+                auto shade = IM_COL32(0, 0, 0, 80);
+                auto* bg = ImGui::GetBackgroundDrawList();
+                ImVec2 p_min = {0, 0};
+                ImVec2 p_max = {(float)app.shot->w, (float)app.shot->h};
+                bg->AddImage(ImTextureRef(app.shot_tex), p_min, p_max);
 
-        if (app.shot) {
-            auto shade = IM_COL32(0, 0, 0, 80);
-            auto* bg = ImGui::GetBackgroundDrawList();
-            ImVec2 p_min = {0, 0};
-            ImVec2 p_max = {(float)app.shot->w, (float)app.shot->h};
-            bg->AddImage(ImTextureRef(app.shot_tex), p_min, p_max);
+                if (app.dragging) {
+                    ImVec2 r_min = ImMin(app.start, app.drag);
+                    ImVec2 r_max = ImMax(app.start, app.drag);
+
+                    bg->AddRectFilled({0, 0}, {p_max.x, r_min.y}, shade);
+                    bg->AddRectFilled({0, r_max.y}, {p_max.x, p_max.y}, shade);
+                    bg->AddRectFilled({0, r_min.y}, {r_min.x, r_max.y}, shade);
+                    bg->AddRectFilled({r_max.x, r_min.y}, {p_max.x, r_max.y}, shade);
+                } else {
+                    bg->AddRectFilled(p_min, p_max, shade);
+                }
+            }
 
             if (app.dragging) {
-                ImVec2 r_min = ImMin(app.start, app.drag);
-                ImVec2 r_max = ImMax(app.start, app.drag);
-
-                bg->AddRectFilled({0, 0}, {p_max.x, r_min.y}, shade);
-                bg->AddRectFilled({0, r_max.y}, {p_max.x, p_max.y}, shade);
-                bg->AddRectFilled({0, r_min.y}, {r_min.x, r_max.y}, shade);
-                bg->AddRectFilled({r_max.x, r_min.y}, {p_max.x, r_max.y}, shade);
-            } else {
-                bg->AddRectFilled(p_min, p_max, shade);
+                auto white = IM_COL32(255, 255, 255, 255);
+                auto* fg = ImGui::GetForegroundDrawList();
+                fg->AddRect(app.start, app.drag, white);
             }
-        }
-
-        if (app.dragging) {
-            auto white = IM_COL32(255, 255, 255, 255);
-            auto* fg = ImGui::GetForegroundDrawList();
-            fg->AddRect(app.start, app.drag, white);
+        } else if (app.mode == SETTINGS) {
+            settings_ui(&app);
         }
 
         ImGui::Render();
@@ -498,6 +567,9 @@ int main(int, char**) {
     }
 
     hook_stop();
+    // keybinds_save("kadr.kbd");
+    config_save("kadr_config.json");
+    shutdown_keybinds();
     if (app.hook_thread.joinable()) app.hook_thread.join();
 
     if (app.window) CloseWindow(&app);

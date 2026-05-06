@@ -1,0 +1,45 @@
+#ifndef GLOBALS_H
+#define GLOBALS_H
+
+#include <nlohmann/json.hpp>
+#include <string>
+#include <thread>
+#include "graphics.h"
+
+constexpr ImVec2 inv_pos = {FLT_MIN, FLT_MIN};
+
+enum KadrMode { IDLE, SC, SETTINGS };
+
+struct App {
+    KadrMode mode = IDLE;
+
+    SDL_Window* window = nullptr;
+    SDL_GLContext gl_context = nullptr;
+    bool running = true;
+    bool pending_close = false;
+    std::thread hook_thread;
+    SDL_Surface* shot = nullptr;
+    ImTextureID shot_tex = -1;
+    SDL_Tray* tray = nullptr;
+    SDL_Surface* icon = nullptr;
+
+    ImVec2 start, drag = inv_pos;
+    bool dragging = false;
+};
+
+struct CFG {
+    bool copy_to_clipboard = true;
+    bool save_to_disk = true;
+    std::string save_path = "screenshots";
+    bool start_on_login = false;
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE_WITH_DEFAULT(CFG,
+        copy_to_clipboard,
+        save_to_disk,
+        save_path,
+        start_on_login)
+};
+
+extern CFG cfg;
+
+#endif  //GLOBALS_H
