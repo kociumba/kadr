@@ -258,12 +258,12 @@ static void CloseWindow(App* app) {
 
 void save_screen(App* app, bool crop) {
     if (!app->shot) return;
-    ensure_dir("screenshots");
+    ensure_dir(cfg.save_path);
     auto now = std::chrono::system_clock::now();
     auto stamp = std::format("{:%F_%H-%M-%S}", now);
-    auto path = std::format("screenshots{}kadr_screenshot_{}.png",
-        std::string(1, fs::path::preferred_separator),
-        stamp);
+    auto path = std::format(
+        "{}kadr_screenshot_{}.png", std::string(1, fs::path::preferred_separator), stamp);
+    path = cfg.save_path + path;
 
     bool saved = false;
 
@@ -463,9 +463,10 @@ int main(int, char**) {
                 } else if (e.type == SDL_EVENT_MOUSE_BUTTON_UP &&
                            e.button.button == SDL_BUTTON_LEFT) {
                     app.dragging = false;
-                    save_screen(&app, app.start != app.drag);
 
-                    copy_screenshot_to_clipboard(&app);
+                    if (cfg.save_to_disk) save_screen(&app, app.start != app.drag);
+
+                    if (cfg.copy_to_clipboard) copy_screenshot_to_clipboard(&app);
 
                     app.start = inv_pos;
                     app.drag = inv_pos;

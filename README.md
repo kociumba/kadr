@@ -2,14 +2,30 @@
 
 <img align="right" src="https://raw.githubusercontent.com/kociumba/kadr/main/assets/kadr_icon.png" alt="klarity icon" width="150" height="150"/>
 
-kadr is a very simple screenshot utility, it currently lacks features like settings or screenshot upload, but it makes up for that by actually taking screenshots
+kadr is a very simple screenshot utility, that is meant to be reliable
 
-the core idea is to deliver an app that can take screenshots in a mostly similar manner on at least windows and linux and possibly macos, and make that app reliable, unlike for example the default windows "snip" app that half the time even refuses to open
+it is being made out of frustration with tools like the windows snip tool, being too lazy to use tools like sharex
 
 ## basic info
 
-currently using kadr is incredibly simple:
+currently kadr remains very bare bones, but has some configuration and qol features
 
-- open kadr
-- `alt+shift+s` takes a screenshot
-- close kadr from the system tray or kill it's process
+- keybinds rebindable with any key combo
+- a separate settings ui (bound to `F7` by default)
+- the screenshot/snip mode (bound to `ALT + SHIFT + S` by default)
+- system tray integration
+
+## building/testing
+
+since kadr is still in early stages of development no ci is set up,
+but building for usage or testing is very simple
+
+if you have ever used xmake before, then you already know how to build it
+
+otherwise follow these steps:
+
+- install xmake
+- clone/download the repo
+- run `xmake` in the repo root
+
+this will build kadr in release mode, in `[repo_root]/build/[os]/release/`

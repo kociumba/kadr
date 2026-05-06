@@ -97,6 +97,11 @@ void settings_ui(App* app) {
     if (ImGui::Checkbox("save to disk after capture", &cfg.save_to_disk))
         config_save("kadr_config.json");
 
+    if (cfg.copy_to_clipboard == false && cfg.save_to_disk == false) {
+        ImGui::TextColored(ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered],
+            "You WILL lose all screenshots taken !!!");
+    }
+
     ImGui::SeparatorText("output");
     ImGui::SetNextItemWidth(300);
     if (ImGui::InputText("save folder", &cfg.save_path)) config_save("kadr_config.json");
@@ -149,8 +154,10 @@ void settings_ui(App* app) {
         keybinds_cancel_capture();
     }
 
+    ImGui::BeginDisabled();
     ImGui::SeparatorText("behaviour");
     if (ImGui::Checkbox("start on login", &cfg.start_on_login)) config_save("kadr_config.json");
+    ImGui::EndDisabled();
 
     ImGui::End();
 }
