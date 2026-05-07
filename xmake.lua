@@ -26,6 +26,11 @@ target("kadr")
         add_ldflags("/ENTRY:mainCRTStartup", {force = true})
     end
 
+    on_load(function (target)
+          local name = path.filename(target:targetfile())
+          target:add("defines", "KADR_EXEC=\"" .. name .. "\"")
+        end)
+
     after_build(function (target)
             local outdir = target:targetdir()
             local srcdir = path.join(os.projectdir(), "assets")

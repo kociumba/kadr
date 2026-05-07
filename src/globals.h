@@ -1,12 +1,21 @@
 #ifndef GLOBALS_H
 #define GLOBALS_H
 
+#include <filesystem>
 #include <nlohmann/json.hpp>
 #include <string>
 #include <thread>
 #include "graphics.h"
 
+#if !defined(KADR_EXEC)
+#define KADR_EXEC ""
+#endif
+
+namespace fs = std::filesystem;
+
 constexpr ImVec2 inv_pos = {FLT_MIN, FLT_MIN};
+static const std::string sep_str(1, fs::path::preferred_separator);
+static const char* sep = sep_str.c_str();
 
 enum KadrMode { IDLE, SC, SETTINGS };
 

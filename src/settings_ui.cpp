@@ -1,6 +1,7 @@
 #include "settings_ui.h"
 #include <magic_enum_all.hpp>
 #include <ranges>
+#include "auto_run.h"
 #include "config.h"
 #include "input.h"
 
@@ -154,10 +155,22 @@ void settings_ui(App* app) {
         keybinds_cancel_capture();
     }
 
-    ImGui::BeginDisabled();
     ImGui::SeparatorText("behaviour");
-    if (ImGui::Checkbox("start on login", &cfg.start_on_login)) config_save("kadr_config.json");
-    ImGui::EndDisabled();
+    static bool fail_warning = false;
+    if (ImGui::Checkbox("start on login", &cfg.start_on_login)) {
+        fail_warning = false;
+        bool ok = cfg.start_on_login ? add_to_autostart() : remove_from_autostart();
+        if (ok) {
+            config_save("kadr_config.json");
+        } else {
+            cfg.start_on_login = !cfg.start_on_login;
+            fail_warning = true;
+        }
+    }
+    if (fail_warning) {
+        ImGui::TextColored(
+            ImGui::GetStyle().Colors[ImGuiCol_Button], "failed to add/remove kadr from startup");
+    }
 
     ImGui::End();
 }

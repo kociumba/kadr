@@ -13,6 +13,7 @@
 #include "globals.h"
 #include "graphics.h"
 #include "input.h"
+#include "lock.h"
 #include "reflection.h"
 #include "settings_ui.h"
 #include "textures.h"
@@ -51,8 +52,9 @@ bool ensure_dir(const std::string& path) {
 
 bool logger_proc(unsigned int level, const char* format, ...) {
     bool status = false;
-
     va_list args;
+    va_start(args, format);
+
     switch (level) {
         case LOG_LEVEL_INFO:
             printf("[INFO] ");
@@ -68,6 +70,7 @@ bool logger_proc(unsigned int level, const char* format, ...) {
             break;
     }
 
+    va_end(args);
     return status;
 }
 
@@ -260,9 +263,9 @@ void save_screen(App* app, bool crop) {
     if (!app->shot) return;
     ensure_dir(cfg.save_path);
     auto now = std::chrono::system_clock::now();
-    auto stamp = std::format("{:%F_%H-%M-%S}", now);
-    auto path = std::format(
-        "{}kadr_screenshot_{}.png", std::string(1, fs::path::preferred_separator), stamp);
+    auto now_sec = std::chrono::floor<std::chrono::seconds>(now);
+    auto stamp = std::format("{:%F_%H-%M-%S}", now_sec);
+    auto path = std::format("{}kadr_screenshot_{}.png", sep, stamp);
     path = cfg.save_path + path;
 
     bool saved = false;
@@ -392,6 +395,14 @@ static void TransitionToSettings(App* app) {
 }
 
 int main(int, char**) {
+    if (!get_lock()) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION,
+            "kadr is already open",
+            "an instance of kadr is already open\nto reopen kadr close the running process first",
+            nullptr);
+        return 69;
+    }
+
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return -1;
@@ -427,6 +438,11 @@ int main(int, char**) {
             TransitionToSettings((App*)ud);
         },
         &app);
+
+    SDL_TrayEntry* reload_entry =
+        SDL_InsertTrayEntryAt(menu, -1, "Reload Settings", SDL_TRAYENTRY_BUTTON);
+    SDL_SetTrayEntryCallback(
+        reload_entry, [](void* ud, SDL_TrayEntry*) { config_load("kadr_config.json"); }, &app);
 
     SDL_TrayEntry* quit_entry = SDL_InsertTrayEntryAt(menu, -1, "Quit", SDL_TRAYENTRY_BUTTON);
     SDL_SetTrayEntryCallback(quit_entry, callback_quit, NULL);
@@ -489,6 +505,7 @@ int main(int, char**) {
             app.pending_close = false;
             SDL_DestroySurface(app.shot);
             app.shot = nullptr;
+            app.shot_tex = 0;
             destroy_tex(app.shot_tex);
             CloseWindow(&app);
             continue;
@@ -579,5 +596,8 @@ int main(int, char**) {
     SDL_DestroyTray(app.tray);
     SDL_DestroySurface(app.icon);
     SDL_Quit();
+
+    remove_lock();
+
     return 0;
 }
