@@ -32,6 +32,9 @@ struct App {
     SDL_Tray* tray = nullptr;
     SDL_Surface* icon = nullptr;
 
+    int vd_min_x = 0;
+    int vd_min_y = 0;
+
     ImVec2 start, drag = inv_pos;
     bool dragging = false;
 };

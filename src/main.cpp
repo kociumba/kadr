@@ -17,6 +17,7 @@
 #include "reflection.h"
 #include "settings_ui.h"
 #include "textures.h"
+#include "toolbar.h"
 
 #if defined(__APPLE__)
 #include <TargetConditionals.h>
@@ -222,6 +223,9 @@ static bool OpenWindow(App* app, KadrMode mode) {
                     if (bounds.y + bounds.h > max_y) max_y = bounds.y + bounds.h;
                 }
             }
+
+            app->vd_min_x = min_x;
+            app->vd_min_y = min_y;
 
             SDL_SetWindowPosition(app->window, min_x, min_y);
             SDL_SetWindowSize(app->window, max_x - min_x, max_y - min_y);
@@ -466,7 +470,7 @@ int main(int, char**) {
             //     app.pending_close = true;
             // }
 
-            if (app.mode == SC) {
+            if (app.mode == SC && !ImGui::GetIO().WantCaptureMouse) {
                 if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
                     if (e.button.button == SDL_BUTTON_LEFT) {
                         app.start = {e.button.x, e.button.y};
@@ -477,7 +481,7 @@ int main(int, char**) {
                         app.drag = inv_pos;
                     }
                 } else if (e.type == SDL_EVENT_MOUSE_BUTTON_UP &&
-                           e.button.button == SDL_BUTTON_LEFT) {
+                           e.button.button == SDL_BUTTON_LEFT && app.dragging) {
                     app.dragging = false;
 
                     if (cfg.save_to_disk) save_screen(&app, app.start != app.drag);
@@ -488,6 +492,9 @@ int main(int, char**) {
                     app.drag = inv_pos;
 
                     app.pending_close = true;
+                } else if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
+                           e.button.button == SDL_BUTTON_RIGHT && app.dragging) {
+                    app.dragging = false;
                 }
             }
         }
@@ -540,6 +547,8 @@ int main(int, char**) {
         ImGui::NewFrame();
 
         if (app.mode == SC) {
+            toolbar(&app);
+
             if (app.shot) {
                 auto shade = IM_COL32(0, 0, 0, 80);
                 auto* bg = ImGui::GetBackgroundDrawList();
@@ -561,6 +570,7 @@ int main(int, char**) {
             }
 
             if (app.dragging) {
+                drag_ui(&app);
                 auto white = IM_COL32(255, 255, 255, 255);
                 auto* fg = ImGui::GetForegroundDrawList();
                 fg->AddRect(app.start, app.drag, white);
