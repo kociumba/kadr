@@ -52,7 +52,9 @@ Action keybinds_poll();
 
 const KeyState& keybinds_state();
 
+void keybinds_bind_silent(Action action, const KeyCombo& combo);
 void keybinds_bind(Action action, const KeyCombo& combo);
+void keybinds_unbind_silent(Action action);
 void keybinds_unbind(Action action);
 const std::vector<Binding>& keybinds_get_bindings();
 

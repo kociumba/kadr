@@ -18,6 +18,7 @@
 #include "settings_ui.h"
 #include "textures.h"
 #include "toolbar.h"
+#include "window_cords.h"
 
 #if defined(__APPLE__)
 #include <TargetConditionals.h>
@@ -91,7 +92,7 @@ static void uiohook_dispatch(uiohook_event* const event) {
                 g_open_requested_settings.store(true);
                 break;
             case Action::CLOSE_WINDOW:
-                SDL_Log("window close requested\n");
+                // SDL_Log("window close requested\n");
                 g_close_requested.store(true);
                 break;
             case Action::QUIT_KADR:
@@ -226,6 +227,7 @@ static bool OpenWindow(App* app, KadrMode mode) {
 
             app->vd_min_x = min_x;
             app->vd_min_y = min_y;
+            SDL_Log("virtual space | x: %d y: %d", app->vd_min_x, app->vd_min_y);
 
             SDL_SetWindowPosition(app->window, min_x, min_y);
             SDL_SetWindowSize(app->window, max_x - min_x, max_y - min_y);
@@ -349,28 +351,34 @@ static bool copy_surface_to_clipboard(SDL_Surface* surface) {
     return ok;
 }
 
-static bool copy_screenshot_to_clipboard(App* app) {
+static bool copy_screenshot_to_clipboard(App* app, bool crop) {
     if (!app->shot) return false;
 
     SDL_Surface* src = app->shot;
     SDL_Surface* cropped = nullptr;
 
-    if (app->start != app->drag) {
+    if (crop) {
         SDL_Rect src_rect;
         src_rect.x = (int)((app->start.x < app->drag.x) ? app->start.x : app->drag.x);
         src_rect.y = (int)((app->start.y < app->drag.y) ? app->start.y : app->drag.y);
         src_rect.w = (int)abs(app->drag.x - app->start.x);
         src_rect.h = (int)abs(app->drag.y - app->start.y);
 
-        if (src_rect.w > 0 && src_rect.h > 0) {
-            cropped = SDL_CreateSurface(src_rect.w, src_rect.h, app->shot->format);
-            if (cropped && SDL_BlitSurface(app->shot, &src_rect, cropped, nullptr)) {
-                src = cropped;
-            } else {
-                if (cropped) SDL_DestroySurface(cropped);
-                cropped = nullptr;
-            }
+        if (src_rect.w == 0 || src_rect.h == 0) return false;
+
+        cropped = SDL_CreateSurface(src_rect.w, src_rect.h, app->shot->format);
+        if (!cropped) {
+            SDL_Log("Failed to create surface: %s", SDL_GetError());
+            return false;
         }
+
+        if (!SDL_BlitSurface(app->shot, &src_rect, cropped, nullptr)) {
+            SDL_Log("Screenshot cropping failed: %s", SDL_GetError());
+            SDL_DestroySurface(cropped);
+            return false;
+        }
+
+        src = cropped;
     }
 
     bool result = copy_surface_to_clipboard(src);
@@ -385,6 +393,7 @@ void callback_quit(void* userdata, SDL_TrayEntry* entry) {
 }
 
 static void TransitionToSC(App* app) {
+    capture_windows();
     if (!app->window) CreateGLContext(app, SC);
     if (!app->shot) {
         app->shot = Screenshotter().TakeScreenshot();
@@ -415,10 +424,10 @@ int main(int, char**) {
     init_keybinds();
     keybinds_set_changed_callback([] { config_save("kadr_config.json"); });
 
-    keybinds_bind(Action::TAKE_SCREENSHOT, combo({VC_ALT_L, VC_SHIFT_L, VC_S}));
-    keybinds_bind(Action::OPEN_SETTINGS, combo({VC_F7}));
-    keybinds_bind(Action::CLOSE_WINDOW, combo({VC_ESCAPE}));
-    keybinds_bind(Action::QUIT_KADR, combo({VC_CONTROL_L, VC_SHIFT_L, VC_E}));
+    keybinds_bind_silent(Action::TAKE_SCREENSHOT, combo({VC_ALT_L, VC_SHIFT_L, VC_S}));
+    keybinds_bind_silent(Action::OPEN_SETTINGS, combo({VC_F7}));
+    keybinds_bind_silent(Action::CLOSE_WINDOW, combo({VC_ESCAPE}));
+    keybinds_bind_silent(Action::QUIT_KADR, combo({VC_CONTROL_L, VC_SHIFT_L, VC_E}));
 
     // keybinds_load("kadr.kbd");
     config_load("kadr_config.json");
@@ -471,35 +480,56 @@ int main(int, char**) {
             // }
 
             if (app.mode == SC && !ImGui::GetIO().WantCaptureMouse) {
-                if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
-                    if (e.button.button == SDL_BUTTON_LEFT) {
-                        app.start = {e.button.x, e.button.y};
-                        app.dragging = true;
-                    } else if (e.button.button == SDL_BUTTON_RIGHT) {
+                if (cfg.sc_mode == SCMode::Region) {
+                    if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+                        if (e.button.button == SDL_BUTTON_LEFT) {
+                            app.start = {e.button.x, e.button.y};
+                            app.dragging = true;
+                        } else if (e.button.button == SDL_BUTTON_RIGHT) {
+                            app.dragging = false;
+                            app.start = inv_pos;
+                            app.drag = inv_pos;
+                        }
+                    } else if (e.type == SDL_EVENT_MOUSE_BUTTON_UP &&
+                               e.button.button == SDL_BUTTON_LEFT && app.dragging) {
                         app.dragging = false;
+                        const bool crop = app.start != app.drag;
+
+                        if (cfg.save_to_disk) save_screen(&app, crop);
+                        if (cfg.copy_to_clipboard) copy_screenshot_to_clipboard(&app, crop);
+
                         app.start = inv_pos;
                         app.drag = inv_pos;
+
+                        app.pending_close = true;
+                    } else if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
+                               e.button.button == SDL_BUTTON_RIGHT && app.dragging) {
+                        app.dragging = false;
                     }
-                } else if (e.type == SDL_EVENT_MOUSE_BUTTON_UP &&
-                           e.button.button == SDL_BUTTON_LEFT && app.dragging) {
-                    app.dragging = false;
-
-                    if (cfg.save_to_disk) save_screen(&app, app.start != app.drag);
-
-                    if (cfg.copy_to_clipboard) copy_screenshot_to_clipboard(&app);
-
-                    app.start = inv_pos;
-                    app.drag = inv_pos;
-
-                    app.pending_close = true;
-                } else if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
-                           e.button.button == SDL_BUTTON_RIGHT && app.dragging) {
-                    app.dragging = false;
+                } else if (cfg.sc_mode == SCMode::Window) {
+                    if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
+                        e.button.button == SDL_BUTTON_LEFT) {
+                        if (app.start != inv_pos && app.drag != inv_pos) {
+                            if (cfg.save_to_disk) save_screen(&app, true);
+                            if (cfg.copy_to_clipboard) copy_screenshot_to_clipboard(&app, true);
+                            app.pending_close = true;
+                        }
+                    }
                 }
             }
         }
 
         if (g_close_requested.exchange(false)) { app.pending_close = true; }
+
+        if (app.save_full) {
+            app.dragging = false;
+            app.save_full = false;
+
+            if (cfg.save_to_disk) save_screen(&app, false);
+            if (cfg.copy_to_clipboard) copy_screenshot_to_clipboard(&app, false);
+
+            app.pending_close = true;
+        }
 
         if (app.dragging) {
             float x, y;
@@ -542,6 +572,25 @@ int main(int, char**) {
             continue;
         }
 
+        if (cfg.sc_mode == SCMode::Window) {
+            float mx, my;
+            SDL_GetMouseState(&mx, &my);
+            auto wnd = window_at({mx + app.vd_min_x, my + app.vd_min_y});
+            if (wnd) {
+                app.start = ImVec2(wnd->position.x - app.vd_min_x, wnd->position.y - app.vd_min_y);
+                app.drag = ImVec2(wnd->position.x + wnd->size.x - app.vd_min_x,
+                    wnd->position.y + wnd->size.y - app.vd_min_y);
+            } else {
+                app.start = inv_pos;
+                app.drag = inv_pos;
+            }
+
+            if (ImGui::GetIO().WantCaptureMouse) {
+                app.start = inv_pos;
+                app.drag = inv_pos;
+            }
+        }
+
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
@@ -556,7 +605,8 @@ int main(int, char**) {
                 ImVec2 p_max = {(float)app.shot->w, (float)app.shot->h};
                 bg->AddImage(ImTextureRef(app.shot_tex), p_min, p_max);
 
-                if (app.dragging) {
+                if ((app.dragging || cfg.sc_mode == SCMode::Window) &&
+                    (app.start != inv_pos || app.drag != inv_pos)) {
                     ImVec2 r_min = ImMin(app.start, app.drag);
                     ImVec2 r_max = ImMax(app.start, app.drag);
 
@@ -564,17 +614,22 @@ int main(int, char**) {
                     bg->AddRectFilled({0, r_max.y}, {p_max.x, p_max.y}, shade);
                     bg->AddRectFilled({0, r_min.y}, {r_min.x, r_max.y}, shade);
                     bg->AddRectFilled({r_max.x, r_min.y}, {p_max.x, r_max.y}, shade);
+
+                    if (cfg.sc_mode == SCMode::Window && !ImGui::GetIO().WantCaptureMouse) {
+                        wnd_info(&app);
+                    }
                 } else {
                     bg->AddRectFilled(p_min, p_max, shade);
                 }
             }
 
-            if (app.dragging) {
-                drag_ui(&app);
+            if (app.dragging || cfg.sc_mode == SCMode::Window) {
                 auto white = IM_COL32(255, 255, 255, 255);
                 auto* fg = ImGui::GetForegroundDrawList();
                 fg->AddRect(app.start, app.drag, white);
             }
+
+            if (app.dragging && cfg.sc_mode == SCMode::Region) { drag_ui(&app); }
         } else if (app.mode == SETTINGS) {
             settings_ui(&app);
         }

@@ -172,5 +172,7 @@ void settings_ui(App* app) {
             ImGui::GetStyle().Colors[ImGuiCol_Button], "failed to add/remove kadr from startup");
     }
 
+    // ImGui::Checkbox("hide mouse cursor in screenshots", &cfg.hide_cursor);
+
     ImGui::End();
 }

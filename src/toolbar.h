@@ -6,5 +6,6 @@
 
 void toolbar(App* app);
 void drag_ui(App* app);
+void wnd_info(App* app);
 
 #endif  //KADR_TOOLBAR_H

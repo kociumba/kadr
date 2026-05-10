@@ -1,3 +1,6 @@
+#ifndef KADR_CAPTURE_H
+#define KADR_CAPTURE_H
+
 #include <SDL3/SDL.h>
 #include <ScreenCapture.h>
 #include <algorithm>
@@ -5,6 +8,7 @@
 #include <mutex>
 #include <unordered_map>
 #include <vector>
+
 struct Screenshotter {
     SDL_Surface* TakeScreenshot() {
         auto monitors = SL::Screen_Capture::GetMonitors();
@@ -30,10 +34,10 @@ struct Screenshotter {
         const int framesNeeded = static_cast<int>(monitors.size());
 
         auto capture =
-            SL::Screen_Capture::CreateCaptureConfiguration([&monitors]() { return monitors; })
+            SL::Screen_Capture::CreateCaptureConfiguration([&monitors] { return monitors; })
                 ->onNewFrame([&](const SL::Screen_Capture::Image& img,
                                  const SL::Screen_Capture::Monitor& mon) {
-                    std::lock_guard<std::mutex> lock(mtx);
+                    std::lock_guard lock(mtx);
 
                     auto it = bufs.find(mon.Id);
                     if (it == bufs.end() || it->second.ready) return;
@@ -107,3 +111,5 @@ struct Screenshotter {
         return stitched;
     }
 };
+
+#endif
