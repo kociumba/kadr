@@ -172,7 +172,22 @@ void settings_ui(App* app) {
             ImGui::GetStyle().Colors[ImGuiCol_Button], "failed to add/remove kadr from startup");
     }
 
-    // ImGui::Checkbox("hide mouse cursor in screenshots", &cfg.hide_cursor);
+    ImGui::Spacing();
+
+    ImGui::SeparatorText("advanced");
+    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.38f, 0.36f, 0.22f, 1.00f));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.46f, 0.44f, 0.26f, 1.00f));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.52f, 0.50f, 0.28f, 1.00f));
+    bool exp_open = ImGui::CollapsingHeader("experimental");
+    ImGui::PopStyleColor(3);
+
+    if (exp_open) {
+        ImGui::TextColored(ImVec4(0.9f, 0.7f, 0.2f, 1.0f),
+            "   These options may be unstable or behave unexpectedly.");
+        ImGui::Spacing();
+        if (ImGui::Checkbox("hide mouse cursor in screenshots", &cfg.hide_cursor))
+            config_save("kadr_config.json");
+    }
 
     ImGui::End();
 }

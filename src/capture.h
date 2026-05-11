@@ -9,6 +9,8 @@
 #include <unordered_map>
 #include <vector>
 
+// TODO: rewrite this to make it not shit, prolly use different lib or custom
+
 struct Screenshotter {
     SDL_Surface* TakeScreenshot() {
         auto monitors = SL::Screen_Capture::GetMonitors();

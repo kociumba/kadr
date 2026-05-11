@@ -396,8 +396,16 @@ static void TransitionToSC(App* app) {
     capture_windows();
     if (!app->window) CreateGLContext(app, SC);
     if (!app->shot) {
+        float mx, my;
+        if (cfg.hide_cursor) {
+            SDL_GetGlobalMouseState(&mx, &my);
+            SDL_WarpMouseGlobal(69420.0f, 69420.0f);
+        }
+
         app->shot = Screenshotter().TakeScreenshot();
         app->shot_tex = surface_to_imgui(app->shot);
+
+        if (cfg.hide_cursor) { SDL_WarpMouseGlobal(mx, my); }
     }
     if (app->window) OpenWindow(app, SC);
 }
