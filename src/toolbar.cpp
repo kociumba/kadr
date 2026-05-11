@@ -191,7 +191,7 @@ void wnd_info(App* app) {
             ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove |
             ImGuiWindowFlags_NoMouseInputs | ImGuiWindowFlags_NoInputs);
 
-    ImGui::Text("%s : %d", info.title.c_str(), info.pid);
+    ImGui::Text("%s(%s) : %d", info.title.c_str(), info.process_name.c_str(), info.pid);
 
     ImGui::End();
 }

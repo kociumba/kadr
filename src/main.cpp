@@ -76,7 +76,6 @@ bool logger_proc(unsigned int level, const char* format, ...) {
     return status;
 }
 
-// this is fucked, i have to track the mask myself
 static void uiohook_dispatch(uiohook_event* const event) {
     keybinds_on_event(event);
 
@@ -550,8 +549,8 @@ int main(int, char**) {
             app.pending_close = false;
             SDL_DestroySurface(app.shot);
             app.shot = nullptr;
-            app.shot_tex = 0;
             destroy_tex(app.shot_tex);
+            app.shot_tex = 0;
             CloseWindow(&app);
             continue;
         }
