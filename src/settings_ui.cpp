@@ -3,6 +3,7 @@
 #include <ranges>
 #include "auto_run.h"
 #include "config.h"
+#include "hijack.h"
 #include "input.h"
 
 static std::string format_combo(const KeyCombo* combo, bool capturing) {
@@ -168,8 +169,7 @@ void settings_ui(App* app) {
         }
     }
     if (fail_warning) {
-        ImGui::TextColored(
-            ImGui::GetStyle().Colors[ImGuiCol_Button], "failed to add/remove kadr from startup");
+        ImGui::TextColored({255, 0, 0, 255}, "failed to add/remove kadr from startup");
     }
 
     ImGui::Spacing();
@@ -183,10 +183,49 @@ void settings_ui(App* app) {
 
     if (exp_open) {
         ImGui::TextColored(ImVec4(0.9f, 0.7f, 0.2f, 1.0f),
-            "   These options may be unstable or behave unexpectedly.");
+            "\tthese options may be unstable or behave unexpectedly.");
+
         ImGui::Spacing();
+
         if (ImGui::Checkbox("hide mouse cursor in screenshots", &cfg.hide_cursor))
             config_save("kadr_config.json");
+
+#if !defined(_WIN32)
+        ImGui::BeginDisabled();
+#endif
+        static bool hijack_change = false;
+        static bool hijack_fail = false;
+        if (ImGui::Checkbox("hijack the print screen key", &cfg.hijack_prtsc)) {
+            hijack_fail = false;
+            hijack_change = false;
+            bool ok = false;
+            if (cfg.hijack_prtsc) {
+                if (disable_prtsc_snip()) { ok = true; }
+            } else {
+                if (enable_prtsc_snip()) { ok = true; }
+            }
+
+            if (!ok) { hijack_fail = true; }
+            if (ok) {
+                config_save("kadr_config.json");
+                hijack_change = true;
+            }
+        }
+
+        if (cfg.hijack_prtsc) { ImGui::Text("you can now use print screen in your bindings"); }
+
+        if (hijack_change) {
+            ImGui::TextColored({255, 0, 0, 255},
+                "this change will probably need a system or explorer.exe restart !!!");
+        }
+
+        if (hijack_fail) {
+            ImGui::TextColored({255, 0, 0, 255}, "failed to hijack/release print screen");
+        }
+#if !defined(_WIN32)
+        ImGui::TextDisabled("this is currently only supported on windows");
+        ImGui::EndDisabled();
+#endif
     }
 
     ImGui::End();

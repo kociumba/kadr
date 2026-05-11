@@ -49,6 +49,7 @@ struct CFG {
     bool start_on_login = false;
     SCMode sc_mode = SCMode::Region;
     bool hide_cursor = false;
+    bool hijack_prtsc = false;
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE_WITH_DEFAULT(CFG,
         copy_to_clipboard,
@@ -56,7 +57,8 @@ struct CFG {
         save_path,
         start_on_login,
         sc_mode,
-        hide_cursor)
+        hide_cursor,
+        hijack_prtsc)
 };
 
 extern CFG cfg;

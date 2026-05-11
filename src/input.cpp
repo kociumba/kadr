@@ -32,7 +32,7 @@ static void keybinds_notify_changed() {
     if (g_on_changed) g_on_changed();
 }
 
-static void keybinds_unbind_silent(Action action) {
+void keybinds_unbind_silent(Action action) {
     std::erase_if(g_bindings, [action](const Binding& b) { return b.action == action; });
 }
 

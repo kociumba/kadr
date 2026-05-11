@@ -9,6 +9,8 @@
 #define NOGDI
 #include <windows.h>
 
+#include <shellapi.h>
+
 #endif
 
 #endif  //KADR_WIN_INCLUDE_H
