@@ -169,64 +169,71 @@ void settings_ui(App* app) {
         }
     }
     if (fail_warning) {
-        ImGui::TextColored({255, 0, 0, 255}, "failed to add/remove kadr from startup");
+        ImGui::TextColored(
+            {0.984f, 0.286f, 0.204f, 1.00f}, "failed to add/remove kadr from startup");
     }
 
     ImGui::Spacing();
 
     ImGui::SeparatorText("advanced");
-    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.38f, 0.36f, 0.22f, 1.00f));
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.46f, 0.44f, 0.26f, 1.00f));
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.52f, 0.50f, 0.28f, 1.00f));
-    bool exp_open = ImGui::CollapsingHeader("experimental");
-    ImGui::PopStyleColor(3);
+    ImGui::PushStyleColor(ImGuiCol_Text, {0.98f, 0.74f, 0.18f, 1.00f});
+    bool exp_open = ImGui::TreeNodeEx("Experimental features");
+    ImGui::PopStyleColor();
 
     if (exp_open) {
-        ImGui::TextColored(ImVec4(0.9f, 0.7f, 0.2f, 1.0f),
-            "\tthese options may be unstable or behave unexpectedly.");
+        ImGui::TextColored({0.996f, 0.502f, 0.098f, 0.90f},
+            "These options may be unstable or behave unexpectedly.");
 
         ImGui::Spacing();
 
         if (ImGui::Checkbox("hide mouse cursor in screenshots", &cfg.hide_cursor))
             config_save("kadr_config.json");
 
-#if !defined(_WIN32)
-        ImGui::BeginDisabled();
+#ifdef _WIN32
+        constexpr bool can_hijack_prtsc = true;
+#else
+        constexpr bool can_hijack_prtsc = false;
 #endif
+
+        if (!can_hijack_prtsc) ImGui::BeginDisabled();
+
         static bool hijack_change = false;
         static bool hijack_fail = false;
         if (ImGui::Checkbox("hijack the print screen key", &cfg.hijack_prtsc)) {
             hijack_fail = false;
             hijack_change = false;
-            bool ok = false;
-            if (cfg.hijack_prtsc) {
-                if (disable_prtsc_snip()) { ok = true; }
-            } else {
-                if (enable_prtsc_snip()) { ok = true; }
-            }
-
-            if (!ok) { hijack_fail = true; }
+            bool ok = cfg.hijack_prtsc ? disable_prtsc_snip() : enable_prtsc_snip();
             if (ok) {
                 config_save("kadr_config.json");
                 hijack_change = true;
+            } else {
+                cfg.hijack_prtsc = !cfg.hijack_prtsc;
+                hijack_fail = true;
             }
         }
 
-        if (cfg.hijack_prtsc) { ImGui::Text("you can now use print screen in your bindings"); }
+        if (!can_hijack_prtsc) {
+            ImGui::EndDisabled();
+            ImGui::SameLine();
+            ImGui::TextDisabled("(Windows only)");
+        }
+
+        if (cfg.hijack_prtsc && can_hijack_prtsc) {
+            ImGui::Text("you can now use print screen in your bindings");
+        }
 
         if (hijack_change) {
-            ImGui::TextColored({255, 0, 0, 255},
-                "if this change does not take effect immediately, you might need to restart the "
+            ImGui::TextColored({0.984f, 0.286f, 0.204f, 1.00f},
+                "if this change does not take effect immediately\nyou might need to restart the "
                 "system or explorer");
         }
 
         if (hijack_fail) {
-            ImGui::TextColored({255, 0, 0, 255}, "failed to hijack/release print screen");
+            ImGui::TextColored(
+                {0.984f, 0.286f, 0.204f, 1.00f}, "failed to hijack/release print screen");
         }
-#if !defined(_WIN32)
-        ImGui::TextDisabled("this is currently only supported on windows");
-        ImGui::EndDisabled();
-#endif
+
+        ImGui::TreePop();
     }
 
     ImGui::End();
