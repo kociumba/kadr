@@ -216,7 +216,8 @@ void settings_ui(App* app) {
 
         if (hijack_change) {
             ImGui::TextColored({255, 0, 0, 255},
-                "this change will probably need a system or explorer.exe restart !!!");
+                "if this change does not take effect immediately, you might need to restart the "
+                "system or explorer");
         }
 
         if (hijack_fail) {
