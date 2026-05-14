@@ -1,6 +1,6 @@
 add_rules("mode.debug", "mode.release")
 add_repositories("k_xmake_repo https://github.com/kociumba/k_xmake_repo.git")
-set_languages("cxxlatest")
+set_languages("cxx23")
 includes("@builtin/xpack")
 
 add_requires("libuiohook", {configs = {shared = true}})

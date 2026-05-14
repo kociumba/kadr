@@ -290,6 +290,10 @@ const char* keycode_name(uint16_t code) {
             return "PrtSc";
         case VC_SCROLL_LOCK:
             return "ScrollLock";
+        case VC_OPEN_BRACKET:
+            return "[";
+        case VC_CLOSE_BRACKET:
+            return "]";
         case VC_PAUSE:
             return "Pause";
         case VC_NUM_LOCK:
@@ -425,6 +429,8 @@ const std::vector<uint16_t>& all_keycodes() {
         VC_SCROLL_LOCK,
         VC_PAUSE,
         VC_NUM_LOCK,
+        VC_OPEN_BRACKET,
+        VC_CLOSE_BRACKET,
         VC_KP_0,
         VC_KP_1,
         VC_KP_2,
@@ -551,8 +557,12 @@ nlohmann::json keybinds_to_json() {
 }
 
 void keybinds_from_json(const nlohmann::json& j) {
-    g_bindings.clear();
-    g_fired.clear();
+    for (auto& [key, val] : j.items()) {
+        auto action = magic_enum::enum_cast<Action>(key);
+        if (!action) continue;
+        keybinds_unbind_silent(*action);
+    }
+
     for (auto& [key, val] : j.items()) {
         auto action = magic_enum::enum_cast<Action>(key);
         if (!action) continue;
@@ -561,4 +571,6 @@ void keybinds_from_json(const nlohmann::json& j) {
         c.excluded = val.value("excluded", std::vector<uint16_t>{});
         g_bindings.push_back({c, *action});
     }
+
+    g_fired.clear();
 }

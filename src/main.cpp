@@ -15,6 +15,7 @@
 #include "input.h"
 #include "lock.h"
 #include "reflection.h"
+#include "run_on_main.h"
 #include "settings_ui.h"
 #include "textures.h"
 #include "toolbar.h"
@@ -52,6 +53,54 @@ bool ensure_dir(const std::string& path) {
     return !ec;
 }
 
+static std::string screenshot_path() {
+    auto now = std::chrono::system_clock::now();
+    auto now_sec = std::chrono::floor<std::chrono::seconds>(now);
+    auto stamp = std::format("{:%F_%H-%M-%S}", now_sec);
+
+    return cfg.save_path + std::format("{}kadr_screenshot_{}.png", sep, stamp);
+}
+
+static bool copy_surface_to_clipboard(SDL_Surface* surface) {
+    if (!surface) return false;
+
+    SDL_Surface* rgba = SDL_ConvertSurface(surface, SDL_PIXELFORMAT_RGBA32);
+    if (!rgba) {
+        SDL_Log("Failed to convert surface for clipboard: %s", SDL_GetError());
+        return false;
+    }
+
+    clip::image_spec spec;
+    spec.width = static_cast<unsigned long>(rgba->w);
+    spec.height = static_cast<unsigned long>(rgba->h);
+    spec.bits_per_pixel = 32;
+    spec.bytes_per_row = static_cast<unsigned long>(rgba->pitch);
+
+    SDL_PixelFormatDetails const* fmt = SDL_GetPixelFormatDetails(rgba->format);
+
+    spec.red_mask = fmt->Rmask;
+    spec.green_mask = fmt->Gmask;
+    spec.blue_mask = fmt->Bmask;
+    spec.alpha_mask = fmt->Amask;
+
+    spec.red_shift = fmt->Rshift;
+    spec.green_shift = fmt->Gshift;
+    spec.blue_shift = fmt->Bshift;
+    spec.alpha_shift = fmt->Ashift;
+
+    clip::image img(rgba->pixels, spec);
+    bool ok = clip::set_image(img);
+
+    SDL_DestroySurface(rgba);
+
+    if (ok) {
+        SDL_Log("Copied screenshot to clipboard");
+    } else {
+        SDL_Log("Failed to copy screenshot to clipboard");
+    }
+    return ok;
+}
+
 bool logger_proc(unsigned int level, const char* format, ...) {
     bool status = false;
     va_list args;
@@ -85,6 +134,25 @@ static void uiohook_dispatch(uiohook_event* const event) {
             case Action::TAKE_SCREENSHOT:
                 SDL_Log("screenshot triggered\n");
                 g_open_requested_sc.store(true);
+                break;
+            case Action::SAVE_FULLSCREEN:
+                SDL_Log("saving the whole capture");
+                dispatch([] {
+                    float mx, my;
+                    if (cfg.hide_cursor) {
+                        SDL_GetGlobalMouseState(&mx, &my);
+                        SDL_WarpMouseGlobal(69420.0f, 69420.0f);
+                    }
+
+                    SDL_Surface* shot = Screenshotter().TakeScreenshot();
+
+                    if (cfg.hide_cursor) { SDL_WarpMouseGlobal(mx, my); }
+
+                    if (cfg.save_to_disk) SDL_SavePNG(shot, screenshot_path().c_str());
+                    if (cfg.copy_to_clipboard) copy_surface_to_clipboard(shot);
+                    SDL_DestroySurface(shot);
+                });
+
                 break;
             case Action::OPEN_SETTINGS:
                 SDL_Log("settings opened\n");
@@ -266,13 +334,9 @@ static void CloseWindow(App* app) {
 
 void save_screen(App* app, bool crop) {
     if (!app->shot) return;
-    ensure_dir(cfg.save_path);
-    auto now = std::chrono::system_clock::now();
-    auto now_sec = std::chrono::floor<std::chrono::seconds>(now);
-    auto stamp = std::format("{:%F_%H-%M-%S}", now_sec);
-    auto path = std::format("{}kadr_screenshot_{}.png", sep, stamp);
-    path = cfg.save_path + path;
 
+    ensure_dir(cfg.save_path);
+    auto path = screenshot_path();
     bool saved = false;
 
     if (crop) {
@@ -308,46 +372,6 @@ void save_screen(App* app, bool crop) {
         g_last_screenshot_path = path;
         SDL_Log("Screenshot saved: %s", path.c_str());
     }
-}
-
-static bool copy_surface_to_clipboard(SDL_Surface* surface) {
-    if (!surface) return false;
-
-    SDL_Surface* rgba = SDL_ConvertSurface(surface, SDL_PIXELFORMAT_RGBA32);
-    if (!rgba) {
-        SDL_Log("Failed to convert surface for clipboard: %s", SDL_GetError());
-        return false;
-    }
-
-    clip::image_spec spec;
-    spec.width = static_cast<unsigned long>(rgba->w);
-    spec.height = static_cast<unsigned long>(rgba->h);
-    spec.bits_per_pixel = 32;
-    spec.bytes_per_row = static_cast<unsigned long>(rgba->pitch);
-
-    SDL_PixelFormatDetails const* fmt = SDL_GetPixelFormatDetails(rgba->format);
-
-    spec.red_mask = fmt->Rmask;
-    spec.green_mask = fmt->Gmask;
-    spec.blue_mask = fmt->Bmask;
-    spec.alpha_mask = fmt->Amask;
-
-    spec.red_shift = fmt->Rshift;
-    spec.green_shift = fmt->Gshift;
-    spec.blue_shift = fmt->Bshift;
-    spec.alpha_shift = fmt->Ashift;
-
-    clip::image img(rgba->pixels, spec);
-    bool ok = clip::set_image(img);
-
-    SDL_DestroySurface(rgba);
-
-    if (ok) {
-        SDL_Log("Copied screenshot to clipboard");
-    } else {
-        SDL_Log("Failed to copy screenshot to clipboard");
-    }
-    return ok;
 }
 
 static bool copy_screenshot_to_clipboard(App* app, bool crop) {
@@ -423,6 +447,8 @@ int main(int, char**) {
         return 69;
     }
 
+    init();
+
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return -1;
@@ -432,6 +458,8 @@ int main(int, char**) {
     keybinds_set_changed_callback([] { config_save("kadr_config.json"); });
 
     keybinds_bind_silent(Action::TAKE_SCREENSHOT, combo({VC_ALT_L, VC_SHIFT_L, VC_S}));
+    keybinds_bind_silent(
+        Action::SAVE_FULLSCREEN, combo({VC_CONTROL_L, VC_SHIFT_L, VC_PRINTSCREEN}));
     keybinds_bind_silent(Action::OPEN_SETTINGS, combo({VC_F7}));
     keybinds_bind_silent(Action::CLOSE_WINDOW, combo({VC_ESCAPE}));
     keybinds_bind_silent(Action::QUIT_KADR, combo({VC_CONTROL_L, VC_SHIFT_L, VC_E}));
@@ -476,6 +504,8 @@ int main(int, char**) {
     app.hook_thread = std::thread(hook_thread_fn);
 
     while (app.running) {
+        const auto _ = poll();
+
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             if (app.window) ImGui_ImplSDL3_ProcessEvent(&e);
@@ -575,7 +605,7 @@ int main(int, char**) {
         }
 
         if (!app.window || app.mode == IDLE) {
-            SDL_Delay(20);  // idle while hidden
+            SDL_Delay(32);  // idle while hidden
             continue;
         }
 

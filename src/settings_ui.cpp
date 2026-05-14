@@ -224,8 +224,8 @@ void settings_ui(App* app) {
 
         if (hijack_change) {
             ImGui::TextColored({0.984f, 0.286f, 0.204f, 1.00f},
-                "if this change does not take effect immediately\nyou might need to restart the "
-                "system or explorer");
+                "restart explorer or the system if changes don't apply\n"
+                "ignore if already applied");
         }
 
         if (hijack_fail) {
