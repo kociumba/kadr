@@ -228,8 +228,8 @@ static WindowConfig GetWindowConfig(KadrMode mode) {
             return {"kadr | settings",
                 (int)(640 * dpi),
                 (int)(480 * dpi),
-                SDL_WINDOW_OPENGL | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_BORDERLESS |
-                    SDL_WINDOW_HIDDEN,
+                SDL_WINDOW_OPENGL | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_RESIZABLE |
+                    SDL_WINDOW_BORDERLESS | SDL_WINDOW_HIDDEN,
                 false};
         default:
             return {};

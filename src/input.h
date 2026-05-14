@@ -1,10 +1,11 @@
-#ifndef INPUT_H
-#define INPUT_H
+#ifndef KADR_INPUT_H
+#define KADR_INPUT_H
 
 #include <uiohook.h>
 #include <nlohmann/json.hpp>
 #include <unordered_map>
 #include <vector>
+#include "input_boilerplate.h"
 
 using KeyState = std::unordered_map<uint16_t, bool>;
 
@@ -42,6 +43,7 @@ inline const char* action_name(Action action) {
 }
 
 struct Binding {
+    uint32_t id;
     KeyCombo combo;
     Action action;
 };
@@ -55,17 +57,26 @@ Action keybinds_poll();
 
 const KeyState& keybinds_state();
 
-void keybinds_bind_silent(Action action, const KeyCombo& combo);
-void keybinds_bind(Action action, const KeyCombo& combo);
+uint32_t keybinds_bind_silent(Action action, const KeyCombo& combo);
+uint32_t keybinds_bind(Action action, const KeyCombo& combo);
+
 void keybinds_unbind_silent(Action action);
 void keybinds_unbind(Action action);
+
+void keybinds_unbind_silent(uint32_t id);
+void keybinds_unbind(uint32_t id);
+
+void keybinds_unbind_silent(Action action, const KeyCombo& combo);
+void keybinds_unbind(Action action, const KeyCombo& combo);
+
 const std::vector<Binding>& keybinds_get_bindings();
 
-const char* keycode_name(uint16_t code);
+const char* keycode_name(uint16_t code);      // in input_boilerplate.h
+const std::vector<uint16_t>& all_keycodes();  // in input_boilerplate.h
 
-const std::vector<uint16_t>& all_keycodes();
+[[deprecated]] const KeyCombo* keybinds_get_combo(Action action);
+std::vector<KeyCombo> keybinds_get_combos(Action action);
 
-const KeyCombo* keybinds_get_combo(Action action);
 const std::vector<uint16_t>& keybinds_capture_peak();
 
 bool keybinds_is_capturing();
@@ -90,4 +101,4 @@ inline KeyCombo combo_ex(std::initializer_list<uint16_t> req, std::initializer_l
     return KeyCombo{std::vector(req), std::vector(ex)};
 }
 
-#endif /* INPUT_H */
+#endif /* KADR_INPUT_H */

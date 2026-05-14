@@ -28,6 +28,32 @@ static std::string format_combo(const KeyCombo* combo, bool capturing) {
     return s;
 }
 
+#ifdef _WIN32
+static HWND sdl3_get_hwnd(SDL_Window* window) {
+    SDL_PropertiesID props = SDL_GetWindowProperties(window);
+    if (!props) return nullptr;
+    return (HWND)SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr);
+}
+
+static void notify_wm_drag_start(SDL_Window* window) {
+    if (HWND hwnd = sdl3_get_hwnd(window)) {
+        NotifyWinEvent(EVENT_SYSTEM_MOVESIZESTART, hwnd, OBJID_WINDOW, CHILDID_SELF);
+    }
+}
+
+static void notify_wm_drag_end(SDL_Window* window) {
+    if (HWND hwnd = sdl3_get_hwnd(window)) {
+        NotifyWinEvent(EVENT_SYSTEM_MOVESIZEEND, hwnd, OBJID_WINDOW, CHILDID_SELF);
+    }
+}
+
+static void notify_wm_moved(SDL_Window* window) {
+    if (HWND hwnd = sdl3_get_hwnd(window)) {
+        NotifyWinEvent(EVENT_OBJECT_LOCATIONCHANGE, hwnd, OBJID_WINDOW, CHILDID_SELF);
+    }
+}
+#endif
+
 void settings_ui(App* app) {
     constexpr float TITLE_H = 32.0f;
     ImVec2 win_size = ImGui::GetIO().DisplaySize;
@@ -54,6 +80,7 @@ void settings_ui(App* app) {
     ImGui::InvisibleButton("##drag_handle", {win_size.x - TITLE_H, TITLE_H});
 
     static int dragOffsetX, dragOffsetY;
+    static bool was_dragging = false;
 
     if (ImGui::IsItemHovered()) { ImGui::SetMouseCursor(ImGuiMouseCursor_Hand); }
 
@@ -62,14 +89,31 @@ void settings_ui(App* app) {
         SDL_GetMouseState(&mouseInWindowX, &mouseInWindowY);
         dragOffsetX = (int)mouseInWindowX;
         dragOffsetY = (int)mouseInWindowY;
+
+#ifdef _WIN32
+        notify_wm_drag_start(app->window);
+#endif
     }
 
-    if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+    bool is_dragging = ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left);
+
+    if (is_dragging) {
         float globalMouseX, globalMouseY;
         SDL_GetGlobalMouseState(&globalMouseX, &globalMouseY);
 
         SDL_SetWindowPosition(
             app->window, (int)globalMouseX - dragOffsetX, (int)globalMouseY - dragOffsetY);
+
+        was_dragging = true;
+
+#ifdef _WIN32
+        notify_wm_moved(app->window);
+#endif
+    } else if (was_dragging) {
+        was_dragging = false;
+#ifdef _WIN32
+        notify_wm_drag_end(app->window);
+#endif
     }
 
     // close button — top right, fires a clean close without the SC teardown path
@@ -115,38 +159,50 @@ void settings_ui(App* app) {
             continue;
 
         ImGui::PushID(static_cast<int>(action));
-
         ImGui::Text("%s", action_name(action));
-        ImGui::SameLine(180);
 
-        bool is_capturing = keybinds_is_capturing() && keybinds_capture_target() == action;
-        const KeyCombo* combo = keybinds_get_combo(action);
-        std::string label = format_combo(combo, is_capturing);
+        std::vector<KeyCombo> combos = keybinds_get_combos(action);
 
-        if (is_capturing) {
+        bool any_capturing = keybinds_is_capturing() && keybinds_capture_target() == action;
+
+        const auto& all_bindings = keybinds_get_bindings();
+        int slot_index = 0;
+        for (const auto& binding : all_bindings) {
+            if (binding.action != action) continue;
+
+            ImGui::PushID(binding.id);
+
+            bool is_this_capturing = any_capturing && slot_index == 0;
+            std::string label = format_combo(&binding.combo, false);
+
+            ImGui::SameLine(slot_index == 0 ? 180.0f : 0.0f);
+            if (ImGui::Button(label.c_str(), {200, 0})) {
+                keybinds_unbind(binding.id);
+                keybinds_start_capture(action);
+            }
+            ImGui::SameLine();
+            if (ImGui::SmallButton("x")) { keybinds_unbind(binding.id); }
+
+            ++slot_index;
+            ImGui::PopID();
+        }
+
+        if (!any_capturing) {
+            ImGui::SameLine(slot_index == 0 ? 180.0f : 0.0f);
+            ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(50, 50, 50, 180));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(70, 70, 70, 200));
+            if (ImGui::Button("[press keys...]", {200, 0})) { keybinds_start_capture(action); }
+            ImGui::PopStyleColor(2);
+        } else {
+            ImGui::SameLine(slot_index == 0 ? 180.0f : 0.0f);
             ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(80, 120, 80, 255));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(100, 150, 100, 255));
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(80, 120, 80, 255));
-        }
-
-        if (ImGui::Button(label.c_str(), {200, 0})) {
-            if (is_capturing) {
-                keybinds_cancel_capture();
-            } else {
-                keybinds_start_capture(action);
-            }
-        }
-
-        if (is_capturing) {
+            std::string capture_label = format_combo(nullptr, true);
+            if (ImGui::Button(capture_label.c_str(), {200, 0})) { keybinds_cancel_capture(); }
             ImGui::PopStyleColor(3);
             ImGui::SameLine();
             ImGui::TextDisabled("[press combo, release to set]");
-        }
-
-        // unbind button if bound
-        if (combo && !combo->required.empty() && !is_capturing) {
-            ImGui::SameLine();
-            if (ImGui::SmallButton("x")) { keybinds_unbind(action); }
         }
 
         ImGui::PopID();
