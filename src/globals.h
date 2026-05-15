@@ -6,6 +6,7 @@
 #include <string>
 #include <thread>
 #include "graphics.h"
+#include "version.h"
 
 #if !defined(KADR_EXEC)
 #define KADR_EXEC ""
@@ -41,6 +42,7 @@ struct App {
 };
 
 enum class SCMode { Region, Window };
+inline uint32_t WAKE_UP;  // sdl user event for waking up the main thread
 
 struct CFG {
     bool copy_to_clipboard = true;
@@ -50,6 +52,8 @@ struct CFG {
     SCMode sc_mode = SCMode::Region;
     bool hide_cursor = false;
     bool hijack_prtsc = false;
+    bool play_capture_sound = true;
+    std::string capture_sound_path = "assets/shutter.wav";
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE_WITH_DEFAULT(CFG,
         copy_to_clipboard,
@@ -58,7 +62,9 @@ struct CFG {
         start_on_login,
         sc_mode,
         hide_cursor,
-        hijack_prtsc)
+        hijack_prtsc,
+        play_capture_sound,
+        capture_sound_path)
 };
 
 extern CFG cfg;

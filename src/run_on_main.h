@@ -12,26 +12,29 @@
 
 using Task = std::move_only_function<void()>;
 
-struct alignas(64) Queue {
+struct alignas(64) TaskQueue {
     std::mutex mtx;
     std::vector<Task> back;
     std::vector<Task> front;
     std::atomic<bool> dirty{false};
 };
 
-inline Queue g_queue;
+inline TaskQueue g_task_queue;
 inline std::thread::id g_main_thread_id;
 
-inline void init() noexcept { g_main_thread_id = std::this_thread::get_id(); }
+inline void dispatch_init() noexcept { g_main_thread_id = std::this_thread::get_id(); }
 
 template <std::invocable F>
-inline void dispatch(F&& f) {
-    auto& q = g_queue;
+void dispatch(F&& f) {
+    auto& q = g_task_queue;
     {
         std::lock_guard lock{q.mtx};
         q.back.emplace_back(std::forward<F>(f));
     }
     q.dirty.store(true, std::memory_order_release);
+
+    SDL_Event e{WAKE_UP};
+    SDL_PushEvent(&e);
 }
 
 inline std::size_t poll() {
@@ -42,7 +45,7 @@ inline std::size_t poll() {
     }
 #endif
 
-    auto& q = g_queue;
+    auto& q = g_task_queue;
 
     if (!q.dirty.load(std::memory_order_acquire)) [[likely]]
         return 0;

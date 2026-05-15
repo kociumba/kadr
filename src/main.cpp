@@ -17,6 +17,7 @@
 #include "reflection.h"
 #include "run_on_main.h"
 #include "settings_ui.h"
+#include "sound.h"
 #include "textures.h"
 #include "toolbar.h"
 #include "window_cords.h"
@@ -133,10 +134,16 @@ static void uiohook_dispatch(uiohook_event* const event) {
         switch (keybinds_poll()) {
             case Action::TAKE_SCREENSHOT:
                 SDL_Log("screenshot triggered\n");
-                g_open_requested_sc.store(true);
+                if (cfg.play_capture_sound) {
+                    dispatch([] { play_sound_file(cfg.capture_sound_path); });
+                }
+                dispatch([] { g_open_requested_sc.store(true); });
                 break;
             case Action::SAVE_FULLSCREEN:
                 SDL_Log("saving the whole capture");
+                if (cfg.play_capture_sound) {
+                    dispatch([] { play_sound_file(cfg.capture_sound_path); });
+                }
                 dispatch([] {
                     float mx, my;
                     if (cfg.hide_cursor) {
@@ -148,7 +155,10 @@ static void uiohook_dispatch(uiohook_event* const event) {
 
                     if (cfg.hide_cursor) { SDL_WarpMouseGlobal(mx, my); }
 
-                    if (cfg.save_to_disk) SDL_SavePNG(shot, screenshot_path().c_str());
+                    if (cfg.save_to_disk) {
+                        ensure_dir(cfg.save_path);
+                        SDL_SavePNG(shot, screenshot_path().c_str());
+                    }
                     if (cfg.copy_to_clipboard) copy_surface_to_clipboard(shot);
                     SDL_DestroySurface(shot);
                 });
@@ -156,11 +166,11 @@ static void uiohook_dispatch(uiohook_event* const event) {
                 break;
             case Action::OPEN_SETTINGS:
                 SDL_Log("settings opened\n");
-                g_open_requested_settings.store(true);
+                dispatch([] { g_open_requested_settings.store(true); });
                 break;
             case Action::CLOSE_WINDOW:
                 // SDL_Log("window close requested\n");
-                g_close_requested.store(true);
+                dispatch([] { g_close_requested.store(true); });
                 break;
             case Action::QUIT_KADR:
                 SDL_Event quit_event;
@@ -218,16 +228,16 @@ static WindowConfig GetWindowConfig(KadrMode mode) {
     switch (mode) {
         case SC:
             return {"kadr | screenshot",
-                (int)(1280 * dpi),
-                (int)(720 * dpi),
+                (int)(1920 * dpi),
+                (int)(1080 * dpi),
                 SDL_WINDOW_OPENGL | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_ALWAYS_ON_TOP |
                     SDL_WINDOW_BORDERLESS | SDL_WINDOW_TRANSPARENT | SDL_WINDOW_UTILITY |
                     SDL_WINDOW_HIDDEN,
                 true};
         case SETTINGS:
             return {"kadr | settings",
-                (int)(640 * dpi),
-                (int)(480 * dpi),
+                (int)(1280 * dpi),
+                (int)(720 * dpi),
                 SDL_WINDOW_OPENGL | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_RESIZABLE |
                     SDL_WINDOW_BORDERLESS | SDL_WINDOW_HIDDEN,
                 false};
@@ -447,14 +457,18 @@ int main(int, char**) {
         return 69;
     }
 
-    init();
+    dispatch_init();
 
-    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return -1;
     }
 
     init_keybinds();
+    sound_init();
+
+    WAKE_UP = SDL_RegisterEvents(1);
+
     keybinds_set_changed_callback([] { config_save("kadr_config.json"); });
 
     keybinds_bind_silent(Action::TAKE_SCREENSHOT, combo({VC_ALT_L, VC_SHIFT_L, VC_S}));
@@ -493,7 +507,7 @@ int main(int, char**) {
         reload_entry, [](void* ud, SDL_TrayEntry*) { config_load("kadr_config.json"); }, &app);
 
     SDL_TrayEntry* quit_entry = SDL_InsertTrayEntryAt(menu, -1, "Quit", SDL_TRAYENTRY_BUTTON);
-    SDL_SetTrayEntryCallback(quit_entry, callback_quit, NULL);
+    SDL_SetTrayEntryCallback(quit_entry, callback_quit, nullptr);
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -605,7 +619,8 @@ int main(int, char**) {
         }
 
         if (!app.window || app.mode == IDLE) {
-            SDL_Delay(32);  // idle while hidden
+            SDL_Event e;
+            if (SDL_WaitEventTimeout(&e, 500)) { SDL_PushEvent(&e); }
             continue;
         }
 
@@ -690,6 +705,7 @@ int main(int, char**) {
     // keybinds_save("kadr.kbd");
     config_save("kadr_config.json");
     shutdown_keybinds();
+    sound_quit();
     if (app.hook_thread.joinable()) app.hook_thread.join();
 
     if (app.window) CloseWindow(&app);

@@ -5,6 +5,7 @@
 #include "config.h"
 #include "hijack.h"
 #include "input.h"
+#include "sound.h"
 
 static std::string format_combo(const KeyCombo* combo, bool capturing) {
     if (capturing) {
@@ -144,8 +145,8 @@ void settings_ui(App* app) {
         config_save("kadr_config.json");
 
     if (cfg.copy_to_clipboard == false && cfg.save_to_disk == false) {
-        ImGui::TextColored(ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered],
-            "You WILL lose all screenshots taken !!!");
+        ImGui::TextColored(
+            {0.984f, 0.286f, 0.204f, 1.00f}, "You WILL lose all screenshots taken !!!");
     }
 
     ImGui::SeparatorText("output");
@@ -159,23 +160,29 @@ void settings_ui(App* app) {
             continue;
 
         ImGui::PushID(static_cast<int>(action));
+
+        const float BINDINGS_X = 180.0f;
+        const float ROW_H = ImGui::GetFrameHeightWithSpacing();  // button + normal gap
+        float row_top_y = ImGui::GetCursorPosY();
+        float current_y = row_top_y;
+
+        // --- left column: action name (top-aligned) ---
+        ImGui::SetCursorPosY(row_top_y);
         ImGui::Text("%s", action_name(action));
 
-        std::vector<KeyCombo> combos = keybinds_get_combos(action);
-
+        // --- right column: all bindings stacked vertically ---
         bool any_capturing = keybinds_is_capturing() && keybinds_capture_target() == action;
-
         const auto& all_bindings = keybinds_get_bindings();
         int slot_index = 0;
+
         for (const auto& binding : all_bindings) {
             if (binding.action != action) continue;
 
             ImGui::PushID(binding.id);
 
-            bool is_this_capturing = any_capturing && slot_index == 0;
+            ImGui::SetCursorPos({BINDINGS_X, current_y});
             std::string label = format_combo(&binding.combo, false);
 
-            ImGui::SameLine(slot_index == 0 ? 180.0f : 0.0f);
             if (ImGui::Button(label.c_str(), {200, 0})) {
                 keybinds_unbind(binding.id);
                 keybinds_start_capture(action);
@@ -184,17 +191,20 @@ void settings_ui(App* app) {
             if (ImGui::SmallButton("x")) { keybinds_unbind(binding.id); }
 
             ++slot_index;
+            current_y += ROW_H;
             ImGui::PopID();
         }
 
+        // capture / "add binding" row
         if (!any_capturing) {
-            ImGui::SameLine(slot_index == 0 ? 180.0f : 0.0f);
+            ImGui::SetCursorPos({BINDINGS_X, current_y});
             ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(50, 50, 50, 180));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(70, 70, 70, 200));
             if (ImGui::Button("[press keys...]", {200, 0})) { keybinds_start_capture(action); }
             ImGui::PopStyleColor(2);
+            current_y += ROW_H;
         } else {
-            ImGui::SameLine(slot_index == 0 ? 180.0f : 0.0f);
+            ImGui::SetCursorPos({BINDINGS_X, current_y});
             ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(80, 120, 80, 255));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(100, 150, 100, 255));
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(80, 120, 80, 255));
@@ -203,7 +213,14 @@ void settings_ui(App* app) {
             ImGui::PopStyleColor(3);
             ImGui::SameLine();
             ImGui::TextDisabled("[press combo, release to set]");
+            current_y += ROW_H;
         }
+
+        // --- advance cursor so the next action starts below the taller of the two columns ---
+        float name_h = ImGui::GetTextLineHeightWithSpacing();
+        float content_h = current_y - row_top_y;
+        float next_y = row_top_y + std::max(name_h, content_h) + ImGui::GetStyle().ItemSpacing.y;
+        ImGui::SetCursorPosY(next_y);
 
         ImGui::PopID();
     }
@@ -228,6 +245,22 @@ void settings_ui(App* app) {
         ImGui::TextColored(
             {0.984f, 0.286f, 0.204f, 1.00f}, "failed to add/remove kadr from startup");
     }
+
+    ImGui::Spacing();
+
+    ImGui::SeparatorText("audio");
+    if (ImGui::Checkbox("play sound on capture", &cfg.play_capture_sound))
+        config_save("kadr_config.json");
+    ImGui::SameLine();
+    if (ImGui::Button("clear sound cache")) clear_sound_cache();
+
+    if (!cfg.play_capture_sound) { ImGui::BeginDisabled(); }
+
+    ImGui::SetNextItemWidth(300);
+    if (ImGui::InputText("capture sound file", &cfg.capture_sound_path))
+        config_save("kadr_config.json");
+
+    if (!cfg.play_capture_sound) { ImGui::EndDisabled(); }
 
     ImGui::Spacing();
 
@@ -290,6 +323,36 @@ void settings_ui(App* app) {
         }
 
         ImGui::TreePop();
+    }
+
+    static bool just_copied = false;
+    static float copied_timer = 0.0f;
+
+    const char* ver = VERSION_FULL_DIRTY;
+    const char* label = just_copied ? "copied!" : ver;
+    ImVec2 text_size = ImGui::CalcTextSize(label);
+    ImVec2 content_max = ImGui::GetWindowContentRegionMax();
+    ImVec2 pos = {
+        content_max.x - text_size.x, content_max.y - ImGui::GetTextLineHeightWithSpacing()};
+
+    ImGui::SetCursorPos(pos);
+    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+
+    if (just_copied) {
+        copied_timer -= ImGui::GetIO().DeltaTime;
+        if (copied_timer <= 0.0f) just_copied = false;
+    }
+
+    ImGui::TextUnformatted(just_copied ? "copied" : ver);
+    ImGui::PopStyleColor();
+
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        if (ImGui::IsItemClicked()) {
+            SDL_SetClipboardText(ver);
+            just_copied = true;
+            copied_timer = 1.5f;
+        }
     }
 
     ImGui::End();
