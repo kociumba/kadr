@@ -19,6 +19,7 @@
 #include "settings_ui.h"
 #include "sound.h"
 #include "textures.h"
+#include "thread_name.h"
 #include "toolbar.h"
 #include "window_cords.h"
 
@@ -187,11 +188,13 @@ static void hook_thread_fn() {
     hook_set_logger_proc(&logger_proc);
     hook_set_dispatch_proc(&uiohook_dispatch);
     int status = hook_run();  // blocks until hook_stop()
-    if (status != UIOHOOK_SUCCESS) { fprintf(stderr, "libuiohook error: %d\n", status); }
+    if (status != UIOHOOK_SUCCESS) {
+        SDL_LogError(SDL_LOG_CATEGORY_INPUT, "libuiohook error: %d\n", status);
+    }
 }
 
 static void SetupGLAttributes() {
-#if defined(__APPLE__) && TARGET_OS_OSX
+#if defined(__APPLE__)
     // macOS: 4.1 Core + forward compatible
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
@@ -469,6 +472,8 @@ int main(int, char**) {
         return -1;
     }
 
+    set_current_thread_name("kadr_main");
+
     init_keybinds();
     sound_init();
 
@@ -520,6 +525,7 @@ int main(int, char**) {
     ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
     app.hook_thread = std::thread(hook_thread_fn);
+    set_thread_name(app.hook_thread.get_id(), "kadr_input");
 
     while (app.running) {
         const auto _ = poll();
