@@ -3,8 +3,10 @@
 
 #include <string_view>
 #include "globals.h"
+#include "paths.h"
 
-constexpr std::string_view lock_name = "kadr.lock";
+// constexpr std::string_view lock_name = "kadr.lock";
+const std::string lock_name = lock_path.string();
 
 inline void remove_lock() { fs::remove(lock_name); }
 
@@ -15,9 +17,9 @@ inline void remove_lock() { fs::remove(lock_name); }
 inline bool get_lock() {
     DWORD current_pid = GetCurrentProcessId();
 
-    std::ifstream ifs(lock_name.data(), std::ios::binary);
+    std::ifstream ifs(lock_name, std::ios::binary);
     if (!ifs) {
-        std::ofstream ofs(lock_name.data(), std::ios::binary);
+        std::ofstream ofs(lock_name, std::ios::binary);
         ofs.write((const char*)&current_pid, sizeof(current_pid));
         return true;
     }
@@ -28,7 +30,7 @@ inline bool get_lock() {
 
     HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, locked_pid);
     if (!hProcess) {
-        std::ofstream ofs(lock_name.data(), std::ios::binary);
+        std::ofstream ofs(lock_name, std::ios::binary);
         ofs.write((const char*)&current_pid, sizeof(current_pid));
         return true;
     }
@@ -44,7 +46,7 @@ inline bool get_lock() {
     CloseHandle(hProcess);
 
     if (exe_name != KADR_EXEC) {
-        std::ofstream ofs(lock_name.data(), std::ios::binary);
+        std::ofstream ofs(lock_name, std::ios::binary);
         ofs.write((const char*)&current_pid, sizeof(current_pid));
         return true;
     }
@@ -59,9 +61,9 @@ inline bool get_lock() {
 inline bool get_lock() {
     pid_t current_pid = getpid();
 
-    std::ifstream ifs(lock_name.data(), std::ios::binary);
+    std::ifstream ifs(lock_name, std::ios::binary);
     if (!ifs) {
-        std::ofstream ofs(lock_name.data(), std::ios::binary);
+        std::ofstream ofs(lock_name, std::ios::binary);
         ofs.write((const char*)&current_pid, sizeof(current_pid));
         return true;
     }
@@ -74,7 +76,7 @@ inline bool get_lock() {
     int ret = proc_pidpath(locked_pid, path, sizeof(path));
 
     auto take_lock = [&]() {
-        std::ofstream ofs(lock_name.data(), std::ios::binary);
+        std::ofstream ofs(lock_name, std::ios::binary);
         ofs.write((const char*)&current_pid, sizeof(current_pid));
         return true;
     };
@@ -95,9 +97,9 @@ inline bool get_lock() {
 inline bool get_lock() {
     pid_t current_pid = getpid();
 
-    std::ifstream ifs(lock_name.data(), std::ios::binary);
+    std::ifstream ifs(lock_name, std::ios::binary);
     if (!ifs) {
-        std::ofstream ofs(lock_name.data(), std::ios::binary);
+        std::ofstream ofs(lock_name, std::ios::binary);
         ofs.write((const char*)&current_pid, sizeof(current_pid));
         return true;
     }
@@ -107,11 +109,11 @@ inline bool get_lock() {
     ifs.close();
 
     auto take_lock = [&]() {
-        std::ofstream ofs(lock_name.data(), std::ios::binary);
+        std::ofstream ofs(lock_name, std::ios::binary);
         ofs.write((const char*)&current_pid, sizeof(current_pid));
         return true;
     };
-    
+
     std::string comm_path = "/proc/" + std::to_string(locked_pid) + "/comm";
     std::ifstream comm_file(comm_path);
     if (!comm_file) { return take_lock(); }

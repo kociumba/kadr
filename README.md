@@ -6,8 +6,9 @@ kadr is a very simple screenshot utility, that is meant to be reliable
 
 it is being made out of frustration with tools like the windows snip tool, and being too lazy to use tools like sharex
 
-currently kadr is only tested on windows, but should work on x11 and macos with minor tweaks, wayland might cause some
-issues tho
+currently kadr is only tested on windows, but should work on x11 and macos with minor tweaks, wayland will probably
+never
+be fully supported, but there may be support for specific compositors like hyprland
 
 ## basic info
 

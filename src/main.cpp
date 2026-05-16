@@ -29,6 +29,7 @@
 namespace fs = std::filesystem;
 
 CFG cfg = {};
+SDL_Event wake_up_event;
 
 static std::atomic g_open_requested_sc{false};
 static std::atomic g_open_requested_settings{false};
@@ -102,28 +103,25 @@ static bool copy_surface_to_clipboard(SDL_Surface* surface) {
     return ok;
 }
 
+// TODO: deprecate later, only leave for libuiohook, remove all other usage
 bool logger_proc(unsigned int level, const char* format, ...) {
-    bool status = false;
     va_list args;
     va_start(args, format);
 
     switch (level) {
         case LOG_LEVEL_INFO:
-            printf("[INFO] ");
-            status = vfprintf(stdout, format, args) >= 0;
+            SDL_LogMessageV(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO, format, args);
             break;
         case LOG_LEVEL_WARN:
-            fprintf(stderr, "[WARN] ");
-            status = vfprintf(stderr, format, args) >= 0;
+            SDL_LogMessageV(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_WARN, format, args);
             break;
         case LOG_LEVEL_ERROR:
-            fprintf(stderr, "[ERROR] ");
-            status = vfprintf(stderr, format, args) >= 0;
+            SDL_LogMessageV(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_ERROR, format, args);
             break;
     }
 
     va_end(args);
-    return status;
+    return true;
 }
 
 static void uiohook_dispatch(uiohook_event* const event) {
@@ -173,9 +171,11 @@ static void uiohook_dispatch(uiohook_event* const event) {
                 dispatch([] { g_close_requested.store(true); });
                 break;
             case Action::QUIT_KADR:
-                SDL_Event quit_event;
-                quit_event.type = SDL_EVENT_QUIT;
-                SDL_PushEvent(&quit_event);
+                dispatch([] {
+                    SDL_Event quit_event;
+                    quit_event.type = SDL_EVENT_QUIT;
+                    SDL_PushEvent(&quit_event);
+                });
                 break;
             default:
                 break;
@@ -420,9 +420,11 @@ static bool copy_screenshot_to_clipboard(App* app, bool crop) {
 }
 
 void callback_quit(void* userdata, SDL_TrayEntry* entry) {
-    SDL_Event event;
-    event.type = SDL_EVENT_QUIT;
-    SDL_PushEvent(&event);
+    dispatch([] {
+        SDL_Event event;
+        event.type = SDL_EVENT_QUIT;
+        SDL_PushEvent(&event);
+    });
 }
 
 static void TransitionToSC(App* app) {
@@ -449,6 +451,9 @@ static void TransitionToSettings(App* app) {
 }
 
 int main(int, char**) {
+    init_paths();
+    cfg = {};  // reinit with paths
+
     if (!get_lock()) {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION,
             "kadr is already open",
@@ -469,7 +474,7 @@ int main(int, char**) {
 
     WAKE_UP = SDL_RegisterEvents(1);
 
-    keybinds_set_changed_callback([] { config_save("kadr_config.json"); });
+    keybinds_set_changed_callback([] { config_save(); });
 
     keybinds_bind_silent(Action::TAKE_SCREENSHOT, combo({VC_ALT_L, VC_SHIFT_L, VC_S}));
     keybinds_bind_silent(
@@ -479,15 +484,15 @@ int main(int, char**) {
     keybinds_bind_silent(Action::QUIT_KADR, combo({VC_CONTROL_L, VC_SHIFT_L, VC_E}));
 
     // keybinds_load("kadr.kbd");
-    config_load("kadr_config.json");
+    config_load();
 
     SetupGLAttributes();
 
     App app = {};
 
-    app.icon = SDL_LoadPNG("assets/kadr_icon.png");
+    app.icon = SDL_LoadPNG(icon_path.string().c_str());
 
-    app.tray = SDL_CreateTray(app.icon, "kadr");
+    app.tray = SDL_CreateTray(app.icon, "kadr | " VERSION_SHORT);
 
     SDL_TrayMenu* menu = SDL_CreateTrayMenu(app.tray);
 
@@ -503,8 +508,7 @@ int main(int, char**) {
 
     SDL_TrayEntry* reload_entry =
         SDL_InsertTrayEntryAt(menu, -1, "Reload Settings", SDL_TRAYENTRY_BUTTON);
-    SDL_SetTrayEntryCallback(
-        reload_entry, [](void* ud, SDL_TrayEntry*) { config_load("kadr_config.json"); }, &app);
+    SDL_SetTrayEntryCallback(reload_entry, [](void* ud, SDL_TrayEntry*) { config_load(); }, &app);
 
     SDL_TrayEntry* quit_entry = SDL_InsertTrayEntryAt(menu, -1, "Quit", SDL_TRAYENTRY_BUTTON);
     SDL_SetTrayEntryCallback(quit_entry, callback_quit, nullptr);
@@ -619,8 +623,7 @@ int main(int, char**) {
         }
 
         if (!app.window || app.mode == IDLE) {
-            SDL_Event e;
-            if (SDL_WaitEventTimeout(&e, 500)) { SDL_PushEvent(&e); }
+            if (SDL_WaitEventTimeout(&wake_up_event, 500)) { SDL_PushEvent(&wake_up_event); }
             continue;
         }
 
@@ -703,7 +706,7 @@ int main(int, char**) {
 
     hook_stop();
     // keybinds_save("kadr.kbd");
-    config_save("kadr_config.json");
+    config_save();
     shutdown_keybinds();
     sound_quit();
     if (app.hook_thread.joinable()) app.hook_thread.join();

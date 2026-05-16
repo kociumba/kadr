@@ -139,10 +139,8 @@ void settings_ui(App* app) {
             ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBringToFrontOnFocus);
 
     ImGui::SeparatorText("capture");
-    if (ImGui::Checkbox("copy to clipboard after capture", &cfg.copy_to_clipboard))
-        config_save("kadr_config.json");
-    if (ImGui::Checkbox("save to disk after capture", &cfg.save_to_disk))
-        config_save("kadr_config.json");
+    if (ImGui::Checkbox("copy to clipboard after capture", &cfg.copy_to_clipboard)) config_save();
+    if (ImGui::Checkbox("save to disk after capture", &cfg.save_to_disk)) config_save();
 
     if (cfg.copy_to_clipboard == false && cfg.save_to_disk == false) {
         ImGui::TextColored(
@@ -151,7 +149,8 @@ void settings_ui(App* app) {
 
     ImGui::SeparatorText("output");
     ImGui::SetNextItemWidth(300);
-    if (ImGui::InputText("save folder", &cfg.save_path)) config_save("kadr_config.json");
+    if (ImGui::InputText("save folder", &cfg.save_path, ImGuiInputTextFlags_ElideLeft))
+        config_save();
 
     ImGui::SeparatorText("hotkeys");
 
@@ -235,7 +234,7 @@ void settings_ui(App* app) {
         fail_warning = false;
         bool ok = cfg.start_on_login ? add_to_autostart() : remove_from_autostart();
         if (ok) {
-            config_save("kadr_config.json");
+            config_save();
         } else {
             cfg.start_on_login = !cfg.start_on_login;
             fail_warning = true;
@@ -249,16 +248,17 @@ void settings_ui(App* app) {
     ImGui::Spacing();
 
     ImGui::SeparatorText("audio");
-    if (ImGui::Checkbox("play sound on capture", &cfg.play_capture_sound))
-        config_save("kadr_config.json");
-    ImGui::SameLine();
+    if (ImGui::Checkbox("play sound on capture", &cfg.play_capture_sound)) config_save();
     if (ImGui::Button("clear sound cache")) clear_sound_cache();
 
     if (!cfg.play_capture_sound) { ImGui::BeginDisabled(); }
 
+    if (ImGui::Button("test capture sound")) play_sound_file(cfg.capture_sound_path);
+
     ImGui::SetNextItemWidth(300);
-    if (ImGui::InputText("capture sound file", &cfg.capture_sound_path))
-        config_save("kadr_config.json");
+    if (ImGui::InputText(
+            "capture sound file", &cfg.capture_sound_path, ImGuiInputTextFlags_ElideLeft))
+        config_save();
 
     if (!cfg.play_capture_sound) { ImGui::EndDisabled(); }
 
@@ -275,8 +275,7 @@ void settings_ui(App* app) {
 
         ImGui::Spacing();
 
-        if (ImGui::Checkbox("hide mouse cursor in screenshots", &cfg.hide_cursor))
-            config_save("kadr_config.json");
+        if (ImGui::Checkbox("hide mouse cursor in screenshots", &cfg.hide_cursor)) config_save();
 
 #ifdef _WIN32
         constexpr bool can_hijack_prtsc = true;
@@ -293,7 +292,7 @@ void settings_ui(App* app) {
             hijack_change = false;
             bool ok = cfg.hijack_prtsc ? disable_prtsc_snip() : enable_prtsc_snip();
             if (ok) {
-                config_save("kadr_config.json");
+                config_save();
                 hijack_change = true;
             } else {
                 cfg.hijack_prtsc = !cfg.hijack_prtsc;

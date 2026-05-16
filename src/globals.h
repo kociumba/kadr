@@ -5,14 +5,14 @@
 #include <nlohmann/json.hpp>
 #include <string>
 #include <thread>
+
 #include "graphics.h"
+#include "paths.h"
 #include "version.h"
 
 #if !defined(KADR_EXEC)
 #define KADR_EXEC ""
 #endif
-
-namespace fs = std::filesystem;
 
 constexpr ImVec2 inv_pos = {FLT_MAX, FLT_MAX};
 static const std::string sep_str(1, fs::path::preferred_separator);
@@ -47,13 +47,13 @@ inline uint32_t WAKE_UP;  // sdl user event for waking up the main thread
 struct CFG {
     bool copy_to_clipboard = true;
     bool save_to_disk = true;
-    std::string save_path = "screenshots";
+    std::string save_path = sc_path.string();
     bool start_on_login = false;
     SCMode sc_mode = SCMode::Region;
     bool hide_cursor = false;
     bool hijack_prtsc = false;
     bool play_capture_sound = true;
-    std::string capture_sound_path = "assets/shutter.wav";
+    std::string capture_sound_path = shutter_path.string();
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE_WITH_DEFAULT(CFG,
         copy_to_clipboard,
