@@ -88,6 +88,7 @@ static void set_theme_kadr_dark() {
     colors[ImGuiCol_TabActive] = ImVec4(0.31f, 0.40f, 0.27f, 1.00f);  // active tab has green warmth
     colors[ImGuiCol_TabUnfocused] = ImVec4(0.20f, 0.19f, 0.18f, 1.00f);
     colors[ImGuiCol_TabUnfocusedActive] = ImVec4(0.26f, 0.30f, 0.23f, 1.00f);  // faint green
+    colors[ImGuiCol_TabSelectedOverline] = ImVec4(0.72f, 0.73f, 0.15f, 1.00f);
 
     // Misc
     colors[ImGuiCol_PlotLines] =

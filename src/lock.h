@@ -5,10 +5,10 @@
 #include "globals.h"
 #include "paths.h"
 
-// constexpr std::string_view lock_name = "kadr.lock";
-const std::string lock_name = lock_path.string();
-
-inline void remove_lock() { fs::remove(lock_name); }
+inline void remove_lock() {
+    std::string lock_name = lock_path.string();
+    fs::remove(lock_name);
+}
 
 #if defined(_WIN32)
 #include "win_include.h"
@@ -16,6 +16,7 @@ inline void remove_lock() { fs::remove(lock_name); }
 // true - kadr is allowed to open, false - instance is already open
 inline bool get_lock() {
     DWORD current_pid = GetCurrentProcessId();
+    std::string lock_name = lock_path.string();
 
     std::ifstream ifs(lock_name, std::ios::binary);
     if (!ifs) {
@@ -60,6 +61,7 @@ inline bool get_lock() {
 
 inline bool get_lock() {
     pid_t current_pid = getpid();
+    std::string lock_name = lock_path.string();
 
     std::ifstream ifs(lock_name, std::ios::binary);
     if (!ifs) {
@@ -96,6 +98,7 @@ inline bool get_lock() {
 
 inline bool get_lock() {
     pid_t current_pid = getpid();
+    std::string lock_name = lock_path.string();
 
     std::ifstream ifs(lock_name, std::ios::binary);
     if (!ifs) {
