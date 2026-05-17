@@ -3,6 +3,7 @@
 #include <ranges>
 #include "auto_run.h"
 #include "config.h"
+#include "file_dialogs.h"
 #include "hijack.h"
 #include "input.h"
 #include "sound.h"
@@ -28,6 +29,38 @@ static std::string format_combo(const KeyCombo* combo, bool capturing) {
     }
     return s;
 }
+
+namespace FilePicker {
+struct Result {
+    bool edited = false;
+    bool browse = false;
+};
+
+static Result draw(const char* label,
+    const char* id,
+    std::string* value,
+    float min_width = 100.0f,
+    const char* browse_label = "browse...") {
+    Result r;
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("%s", label);
+    ImGui::SameLine();
+
+    float browse_w = ImGui::CalcTextSize(browse_label).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+    float spacing = ImGui::GetStyle().ItemSpacing.x;
+    float input_w = std::max(ImGui::GetContentRegionAvail().x - browse_w - spacing, min_width);
+
+    ImGui::SetNextItemWidth(input_w);
+    r.edited = ImGui::InputText(id, value, ImGuiInputTextFlags_ElideLeft);
+
+    ImGui::SameLine();
+    r.browse = ImGui::Button(browse_label);
+
+    return r;
+}
+
+}  // namespace FilePicker
 
 #ifdef _WIN32
 static HWND sdl3_get_hwnd(SDL_Window* window) {
@@ -142,15 +175,30 @@ void settings_ui(App* app) {
     if (ImGui::Checkbox("copy to clipboard after capture", &cfg.copy_to_clipboard)) config_save();
     if (ImGui::Checkbox("save to disk after capture", &cfg.save_to_disk)) config_save();
 
-    if (cfg.copy_to_clipboard == false && cfg.save_to_disk == false) {
+    if (!cfg.copy_to_clipboard && !cfg.save_to_disk) {
         ImGui::TextColored(
             {0.984f, 0.286f, 0.204f, 1.00f}, "You WILL lose all screenshots taken !!!");
     }
 
     ImGui::SeparatorText("output");
-    ImGui::SetNextItemWidth(300);
-    if (ImGui::InputText("save folder", &cfg.save_path, ImGuiInputTextFlags_ElideLeft))
-        config_save();
+
+    // TODO: redo this ui system since this shit is unreadable
+    ImGui::Text("screenshot output folder:");
+    ImGui::Indent(12.0f);
+    auto r = FilePicker::draw("folder:", "##save_folder", &cfg.save_path, 100, "browse...##save");
+    if (r.edited) config_save();
+    if (r.browse) {
+        dialog::open_folder(
+            app->window,
+            [](std::span<const std::string> paths) {
+                if (!paths.empty()) {
+                    cfg.save_path = paths[0];
+                    config_save();
+                }
+            },
+            sc_path.string().c_str());
+    }
+    ImGui::Unindent(12.0f);
 
     ImGui::SeparatorText("hotkeys");
 
@@ -172,7 +220,7 @@ void settings_ui(App* app) {
         // --- right column: all bindings stacked vertically ---
         bool any_capturing = keybinds_is_capturing() && keybinds_capture_target() == action;
         const auto& all_bindings = keybinds_get_bindings();
-        int slot_index = 0;
+        // int slot_index = 0;
 
         for (const auto& binding : all_bindings) {
             if (binding.action != action) continue;
@@ -189,7 +237,7 @@ void settings_ui(App* app) {
             ImGui::SameLine();
             if (ImGui::SmallButton("x")) { keybinds_unbind(binding.id); }
 
-            ++slot_index;
+            // ++slot_index;
             current_y += ROW_H;
             ImGui::PopID();
         }
@@ -249,19 +297,37 @@ void settings_ui(App* app) {
 
     ImGui::SeparatorText("audio");
     if (ImGui::Checkbox("play sound on capture", &cfg.play_capture_sound)) config_save();
-    if (ImGui::Button("clear sound cache")) clear_sound_cache();
+
+    ImGui::Spacing();
+    ImGui::Indent(12.0f);
 
     if (!cfg.play_capture_sound) { ImGui::BeginDisabled(); }
 
-    if (ImGui::Button("test capture sound")) play_sound_file(cfg.capture_sound_path);
+    ImGui::Text("capture sound config:");
+    r = FilePicker::draw(
+        "file:", "##capture_sound_path", &cfg.capture_sound_path, 100, "browse...##sound");
+    if (r.edited) config_save();
+    if (r.browse) {
+        dialog::open_file(app->window,
+            {{"pick a sound clip", "wav;ogg;mp3;flac"}},
+            [](std::span<const std::string> paths) {
+                if (!paths.empty()) {
+                    cfg.capture_sound_path = paths[0];
+                    config_save();
+                }
+            });
+    }
 
-    ImGui::SetNextItemWidth(300);
-    if (ImGui::InputText(
-            "capture sound file", &cfg.capture_sound_path, ImGuiInputTextFlags_ElideLeft))
-        config_save();
+    // ImGui::SameLine();
+    if (ImGui::Button("test capture sound", {150, 0})) play_sound_file(cfg.capture_sound_path);
 
     if (!cfg.play_capture_sound) { ImGui::EndDisabled(); }
 
+    ImGui::Spacing();
+
+    if (ImGui::Button("clear sound cache", {150, 0})) clear_sound_cache();
+
+    ImGui::Unindent(12.0f);
     ImGui::Spacing();
 
     ImGui::SeparatorText("advanced");
