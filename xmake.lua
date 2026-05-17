@@ -1,4 +1,5 @@
 add_rules("mode.debug", "mode.release")
+-- set_policy("build.progress_style", "multirow")
 add_repositories("k_xmake_repo https://github.com/kociumba/k_xmake_repo.git")
 set_languages("cxx23")
 includes("@builtin/xpack")

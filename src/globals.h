@@ -30,7 +30,7 @@ struct App {
     bool save_full = false;
     std::thread hook_thread;
     SDL_Surface* shot = nullptr;
-    ImTextureID shot_tex = -1;
+    ImTextureID shot_tex = 0;
     SDL_Tray* tray = nullptr;
     SDL_Surface* icon = nullptr;
 
