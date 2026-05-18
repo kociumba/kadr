@@ -15,6 +15,7 @@
 #include "input.h"
 #include "lock.h"
 #include "reflection.h"
+#include "resizable_borderless.h"
 #include "run_on_main.h"
 #include "settings_ui.h"
 #include "sound.h"
@@ -324,6 +325,7 @@ static bool OpenWindow(App* app, KadrMode mode) {
     SDL_RaiseWindow(app->window);
 
     app->mode = mode;
+    if (app->mode == SETTINGS) { make_borderless_resizable(app->window); }
     std::string name = std::string(magic_enum::enum_name(mode));
     logger_proc(LOG_LEVEL_INFO, "Window opened in mode %s.\n", name.c_str());
     return true;

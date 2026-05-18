@@ -10,7 +10,7 @@
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
-#define NOUSER
+// #define NOUSER
 #define NOGDI
 #include <windows.h>
 
@@ -18,7 +18,11 @@
 #pragma warning(pop)
 #endif
 
+#include <commctrl.h>
 #include <shellapi.h>
+#include <windowsx.h>
+
+#pragma comment(lib, "comctl32.lib")
 
 #endif
 
