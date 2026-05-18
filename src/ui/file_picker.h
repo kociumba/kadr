@@ -2,7 +2,6 @@
 #define KADR_FILE_PICKER_H
 
 #include "../graphics.h"
-#include "file_dialogs.h"
 
 namespace FilePicker {
 

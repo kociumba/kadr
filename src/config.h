@@ -25,7 +25,7 @@ inline bool config_save() { return config_save(cfg_path.string().c_str()); }
 inline bool config_load(const char* path) {
     std::ifstream f(path);
     if (!f) return false;
-    auto j = nlohmann::json::parse(f, nullptr, false);
+    auto j = nlohmann::json::parse(f, nullptr, false, true);
     if (j.is_discarded()) return false;
     if (j.contains("config")) cfg = j["config"];
     if (j.contains("hotkeys")) keybinds_from_json(j["hotkeys"]);

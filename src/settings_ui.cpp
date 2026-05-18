@@ -3,10 +3,12 @@
 #include <ranges>
 #include "auto_run.h"
 #include "config.h"
+#include "file_dialogs.h"
 #include "hijack.h"
 #include "input.h"
 #include "sound.h"
 #include "ui/file_picker.h"
+#include "ui/timed_trigger.h"
 
 static std::string format_combo(const KeyCombo* combo, bool capturing) {
     if (capturing) {
@@ -382,11 +384,11 @@ void settings_ui(App* app) {
 
     ImGui::EndTabBar();
 
-    static bool just_copied = false;
-    static float copied_timer = 0.0f;
-
+    static bool copied = false;
     const char* ver = VERSION_FULL_DIRTY;
-    const char* label = just_copied ? "copied!" : ver;
+
+    bool show_copied = timing::trigger(&copied, 1500.0f);
+    const char* label = show_copied ? "copied!" : ver;
     ImVec2 text_size = ImGui::CalcTextSize(label);
     ImVec2 content_max = ImGui::GetWindowContentRegionMax();
     ImVec2 pos = {
@@ -394,21 +396,14 @@ void settings_ui(App* app) {
 
     ImGui::SetCursorPos(pos);
     ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
-
-    if (just_copied) {
-        copied_timer -= ImGui::GetIO().DeltaTime;
-        if (copied_timer <= 0.0f) just_copied = false;
-    }
-
-    ImGui::TextUnformatted(just_copied ? "copied" : ver);
+    ImGui::TextUnformatted(label);
     ImGui::PopStyleColor();
 
     if (ImGui::IsItemHovered()) {
         ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
         if (ImGui::IsItemClicked()) {
             SDL_SetClipboardText(ver);
-            just_copied = true;
-            copied_timer = 1.5f;
+            copied = true;
         }
     }
 

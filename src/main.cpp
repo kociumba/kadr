@@ -506,14 +506,26 @@ int main(int, char**) {
     SDL_SetTrayEntryCallback(
         settings_entry,
         [](void* ud, SDL_TrayEntry*) {
-            ((App*)ud)->mode = SETTINGS;
-            TransitionToSettings((App*)ud);
+            dispatch([&] {
+                ((App*)ud)->mode = SETTINGS;
+                TransitionToSettings((App*)ud);
+            });
         },
         &app);
 
     SDL_TrayEntry* reload_entry =
         SDL_InsertTrayEntryAt(menu, -1, "Reload Settings", SDL_TRAYENTRY_BUTTON);
-    SDL_SetTrayEntryCallback(reload_entry, [](void* ud, SDL_TrayEntry*) { config_load(); }, &app);
+    SDL_SetTrayEntryCallback(
+        reload_entry,
+        [](void* ud, SDL_TrayEntry*) {
+            SDL_Log("reloading settings");
+            dispatch([] {
+                if (!config_load()) {
+                    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "failed to reload settings");
+                }
+            });
+        },
+        &app);
 
     SDL_TrayEntry* quit_entry = SDL_InsertTrayEntryAt(menu, -1, "Quit", SDL_TRAYENTRY_BUTTON);
     SDL_SetTrayEntryCallback(quit_entry, callback_quit, nullptr);
