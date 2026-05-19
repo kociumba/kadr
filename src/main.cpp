@@ -31,6 +31,7 @@
 namespace fs = std::filesystem;
 
 CFG cfg = {};
+App app = {};
 SDL_Event wake_up_event;
 
 static std::atomic g_open_requested_sc{false};
@@ -130,6 +131,8 @@ static void uiohook_dispatch(uiohook_event* const event) {
     keybinds_on_event(event);
 
     if (keybinds_is_capturing()) return;
+    if (app.mode == SETTINGS && ImGui::GetIO().WantCaptureKeyboard)
+        return;  // TODO: this check can use some work
     if (event->type == EVENT_KEY_PRESSED) {
         switch (keybinds_poll()) {
             case Action::TAKE_SCREENSHOT:
@@ -495,7 +498,7 @@ int main(int, char**) {
 
     SetupGLAttributes();
 
-    App app = {};
+    app = {};  // reinit
 
     app.icon = SDL_LoadPNG(icon_path.string().c_str());
 

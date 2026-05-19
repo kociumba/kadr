@@ -2,6 +2,8 @@
 #include <algorithm>
 #include <fstream>
 #include <magic_enum/magic_enum_all.hpp>
+#include <optional>
+#include <ranges>
 #include <sstream>
 #include <unordered_set>
 
@@ -13,11 +15,13 @@ static Action g_capture_target = Action::NONE;
 static std::vector<uint16_t> g_capture_peak;
 static KeybindsChangedFn g_on_changed = nullptr;
 static uint32_t g_next_id = 1;
+static ConflictInfo g_conflict;
 
 void init_keybinds() {
     g_state.clear();
     g_bindings.clear();
     g_fired.clear();
+    g_conflict = {};
     g_next_id = 1;
     for (uint16_t code : all_keycodes()) {
         g_state[code] = false;
@@ -28,6 +32,7 @@ void shutdown_keybinds() {
     g_state.clear();
     g_bindings.clear();
     g_fired.clear();
+    g_conflict = {};
     g_next_id = 1;
 }
 
@@ -43,6 +48,28 @@ static void prune_fired() {
         else
             ++it;
     }
+}
+
+static bool combos_equal(const KeyCombo& a, const KeyCombo& b) {
+    if (a.required.size() != b.required.size() || a.excluded.size() != b.excluded.size())
+        return false;
+    auto ra = a.required, rb = b.required;
+    std::ranges::sort(ra);
+    std::ranges::sort(rb);
+    if (ra != rb) return false;
+    auto ea = a.excluded, eb = b.excluded;
+    std::ranges::sort(ea);
+    std::ranges::sort(eb);
+    return ea == eb;
+}
+
+static std::optional<Binding> find_conflict(const KeyCombo& combo, Action target_action) {
+    for (const auto& b : g_bindings) {
+        // if (b.action == target_action) continue;  // this checks doesn't really make sense
+        if (b.action == Action::NONE) continue;
+        if (combos_equal(b.combo, combo)) return b;
+    }
+    return std::nullopt;
 }
 
 void keybinds_unbind_silent(Action action) {
@@ -87,6 +114,16 @@ void keybinds_on_event(const uiohook_event* event) {
         if (!any_down && !g_capture_peak.empty()) {
             KeyCombo new_combo;
             new_combo.required = g_capture_peak;
+
+            auto conflict = find_conflict(new_combo, g_capture_target);
+            if (conflict) {
+                g_conflict = {true, g_capture_target, new_combo, conflict->id, conflict->action};
+                g_capturing = false;
+                g_capture_target = Action::NONE;
+                g_capture_peak.clear();
+                return;
+            }
+
             keybinds_bind(g_capture_target, new_combo);
             g_capturing = false;
             g_capture_target = Action::NONE;
@@ -324,3 +361,16 @@ void keybinds_from_json(const nlohmann::json& j) {
 
     g_fired.clear();
 }
+
+bool keybinds_has_conflict() { return g_conflict.active; }
+const ConflictInfo& keybinds_get_conflict() { return g_conflict; }
+
+void keybinds_conflict_accept() {
+    if (!g_conflict.active) return;
+    // keybinds_unbind_silent(g_conflict.conflict_id);  // for now leave the conflicting bind
+    keybinds_bind_silent(g_conflict.target_action, g_conflict.proposed_combo);
+    keybinds_notify_changed();
+    g_conflict.active = false;
+}
+
+void keybinds_conflict_reject() { g_conflict.active = false; }

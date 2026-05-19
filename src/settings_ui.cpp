@@ -256,6 +256,42 @@ void settings_ui(App* app) {
             keybinds_cancel_capture();
         }
 
+        bool has_conflict = keybinds_has_conflict();
+        static bool was_conflict = false;
+        if (has_conflict && !was_conflict) { ImGui::OpenPopup("Binding Conflict"); }
+        was_conflict = has_conflict;
+
+        bool show_conflict = has_conflict;
+        ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+        ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+        if (ImGui::BeginPopupModal("Binding Conflict",
+                &show_conflict,
+                ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
+            const auto& c = keybinds_get_conflict();
+
+            ImGui::Text("'%s' is already bound to '%s'.",
+                format_combo(&c.proposed_combo, false).c_str(),
+                action_name(c.conflict_action));
+            ImGui::Text("Do you want to bind it anyway?");
+            ImGui::Spacing();
+
+            float btn_w = 120.0f;
+            if (ImGui::Button("Add binding", {btn_w, 0})) {
+                keybinds_conflict_accept();
+                show_conflict = false;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel", {btn_w, 0})) {
+                keybinds_conflict_reject();
+                show_conflict = false;
+            }
+
+            ImGui::EndPopup();
+        }
+
+        if (!show_conflict && keybinds_has_conflict()) { keybinds_conflict_reject(); }
+
         ImGui::EndTabItem();
     }
 

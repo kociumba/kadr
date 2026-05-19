@@ -68,5 +68,6 @@ struct CFG {
 };
 
 extern CFG cfg;
+extern App app;
 
 #endif  //GLOBALS_H

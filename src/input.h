@@ -94,6 +94,19 @@ void keybinds_set_changed_callback(KeybindsChangedFn fn);
 nlohmann::json keybinds_to_json();
 void keybinds_from_json(const nlohmann::json& j);
 
+struct ConflictInfo {
+    bool active = false;
+    Action target_action = Action::NONE;
+    KeyCombo proposed_combo;
+    uint32_t conflict_id = 0;
+    Action conflict_action = Action::NONE;
+};
+
+bool keybinds_has_conflict();
+const ConflictInfo& keybinds_get_conflict();
+void keybinds_conflict_accept();
+void keybinds_conflict_reject();
+
 inline KeyCombo combo(std::initializer_list<uint16_t> req) {
     return KeyCombo{std::vector(req), {}};
 }
