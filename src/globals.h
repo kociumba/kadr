@@ -54,6 +54,8 @@ struct CFG {
     bool hijack_prtsc = false;
     bool play_capture_sound = true;
     std::string capture_sound_path = shutter_path.string();
+    std::string ui_font_path = font_path.string();
+    size_t ui_font_size = 18;
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE_WITH_DEFAULT(CFG,
         copy_to_clipboard,
@@ -64,7 +66,9 @@ struct CFG {
         hide_cursor,
         hijack_prtsc,
         play_capture_sound,
-        capture_sound_path)
+        capture_sound_path,
+        ui_font_path,
+        ui_font_size)
 };
 
 extern CFG cfg;

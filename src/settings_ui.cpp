@@ -4,6 +4,7 @@
 #include "auto_run.h"
 #include "config.h"
 #include "file_dialogs.h"
+#include "fonts.h"
 #include "hijack.h"
 #include "input.h"
 #include "sound.h"
@@ -351,6 +352,41 @@ void settings_ui(App* app) {
 
         ImGui::Unindent(12.0f);
 
+        ImGui::EndTabItem();
+    }
+
+    if (ImGui::BeginTabItem("appearance")) {
+        ImGui::SeparatorText("FONT");
+        ImGui::Indent(12.0f);
+
+        static int font_size = cfg.ui_font_size;
+
+        auto fr = FilePicker::draw(
+            "font file:", "##font_path", &cfg.ui_font_path, 100, "browse...##font");
+        if (fr.edited) { fonts::use(cfg.ui_font_path, font_size); }
+        if (fr.browse) {
+            dialog::open_file(app->window,
+                {{"font files", "ttf;otf;ttc;otc;pfb;pfm;pfa;cff;woff;woff2;fnt;fon;bdf;pcf"}},
+                [](std::span<const std::string> paths) {
+                    if (!paths.empty()) {
+                        cfg.ui_font_path = paths[0];
+                        fonts::use(cfg.ui_font_path, cfg.ui_font_size);
+                    }
+                });
+        }
+
+        ImGui::SetNextItemWidth(120.0f);
+        if (ImGui::InputInt("size##font_size", &font_size)) {
+            // NOTE: these bounds are completely arbitrary and will probably need to be changed
+            if (font_size < 6) font_size = 6;
+            if (font_size > 72) font_size = 72;
+            fonts::use(cfg.ui_font_path, font_size);
+        }
+
+        ImGui::SetNextItemWidth(120.0f);
+        if (ImGui::Button("clear font cache")) { fonts::clear_cache(); }
+
+        ImGui::Unindent(12.0f);
         ImGui::EndTabItem();
     }
 

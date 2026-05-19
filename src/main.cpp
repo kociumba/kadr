@@ -10,6 +10,7 @@
 #include <thread>
 #include "capture.h"
 #include "config.h"
+#include "fonts.h"
 #include "globals.h"
 #include "graphics.h"
 #include "input.h"
@@ -131,8 +132,6 @@ static void uiohook_dispatch(uiohook_event* const event) {
     keybinds_on_event(event);
 
     if (keybinds_is_capturing()) return;
-    if (app.mode == SETTINGS && ImGui::GetIO().WantCaptureKeyboard)
-        return;  // TODO: this check can use some work
     if (event->type == EVENT_KEY_PRESSED) {
         switch (keybinds_poll()) {
             case Action::TAKE_SCREENSHOT:
@@ -540,6 +539,7 @@ int main(int, char**) {
     // ImGui::StyleColorsDark();
     set_theme_kadr_dark();
     ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    if (!fonts::use(cfg.ui_font_path, cfg.ui_font_size)) fonts::use();  // default font fallback
 
     app.hook_thread = std::thread(hook_thread_fn);
     set_thread_name(app.hook_thread.get_id(), "kadr_input");
@@ -672,6 +672,7 @@ int main(int, char**) {
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
+        ImGui::PushFont(fonts::load(cfg.ui_font_path, cfg.ui_font_size), cfg.ui_font_size);
 
         if (app.mode == SC) {
             toolbar(&app);
@@ -712,6 +713,7 @@ int main(int, char**) {
             settings_ui(&app);
         }
 
+        ImGui::PopFont();
         ImGui::Render();
         ImDrawData* draw_data = ImGui::GetDrawData();
 
