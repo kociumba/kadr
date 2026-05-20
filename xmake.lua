@@ -4,9 +4,15 @@ add_repositories("k_xmake_repo https://github.com/kociumba/k_xmake_repo.git")
 set_languages("cxx23")
 includes("@builtin/xpack")
 
-add_requires("libuiohook", {configs = {shared = true}})
-add_requires("imgui", {configs = {opengl3 = true, sdl3 = true, freetype = true}})
-add_requires("opengl", "screen_capture_lite", "clip", "magic_enum", "nlohmann_json", "SDL3_mixer")
+add_requires("libuiohook @default", {configs = {shared = true}})
+add_requires("imgui v1.92.7", {configs = {opengl3 = true, sdl3 = true, freetype = true}})
+add_requires(
+    "opengl",
+    "screen_capture_lite 17.1.2745",
+    "clip v1.15",
+    "magic_enum v0.9.7",
+    "nlohmann_json v3.12.0",
+    "SDL3_mixer @default")
 
 target("kadr")
     set_kind("binary")
@@ -95,7 +101,11 @@ xpack("kadr")
     set_description("")
     set_author("kociumba")
 
-    set_formats("zip", "targz")
+    if is_plat("windows") then
+        set_formats("zip")
+    else
+        set_formats("targz")
+    end
 
     set_bindir("kadr")
     add_targets("kadr")

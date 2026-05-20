@@ -36,6 +36,5 @@ jobs:
                 with:
                     name: kadr_${{ matrix.os }}_${{ matrix.comp }}
                     path: |
-                        ${{ github.workspace }}/build/xpack/kadr/kadr.zip
-                        ${{ github.workspace }}/build/xpack/kadr/kadr.tar.gz
+                        ${{ github.workspace }}/build/xpack/kadr
                     if-no-files-found: warn
