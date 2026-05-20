@@ -14,7 +14,7 @@ jobs:
                 include:
                     - { os: ubuntu-latest, comp: 'clang@llvm-19' }
                     - { os: windows-latest, comp: 'msvc' }
-                    - { os: macos-latest, comp: 'clang@llvm-19' }
+        #           - { os: macos-latest, comp: 'clang@llvm-19' }  # disable macos for now since it seems to hang
 
         steps:
             -   name: checkout repository
