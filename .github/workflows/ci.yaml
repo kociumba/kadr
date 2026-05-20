@@ -6,16 +6,15 @@ on:
 
 jobs:
     build:
-        name: Build on ${{ matrix.build.os }} with ${{ matrix.build.comp }}
-        runs-on: ${{ matrix.build.os }}
+        name: Build on ${{ matrix.os }} with ${{ matrix.comp }}
+        runs-on: ${{ matrix.os }}
         strategy:
             fail-fast: false
             matrix:
-                build: [
-                    { os: ubuntu-latest, comp: 'clang@llvm-19' },
-                    { os: windows-latest, comp: 'msvc' } #'msvc[vs=2026]' },
-                    { os: macos-latest, comp: 'clang@llvm-19' },
-                ]
+                include:
+                    - { os: ubuntu-latest, comp: 'clang@llvm-19' }
+                    - { os: windows-latest, comp: 'msvc' }
+                    - { os: macos-latest, comp: 'clang@llvm-19' }
 
         steps:
             -   name: checkout repository
@@ -30,12 +29,12 @@ jobs:
 
             -   name: build
                 run: |
-                    xmake f --yes -m release --toolchain=${{ matrix.build.comp }}
+                    xmake f --yes -m release --toolchain=${{ matrix.comp }}
                     xmake pack
 
             -   uses: actions/upload-artifact@v4
                 with:
-                    name: kadr_${{ matrix.build.os }}_${{ matrix.build.comp }}
+                    name: kadr_${{ matrix.os }}_${{ matrix.comp }}
                     path: |
                         ${{ github.workspace }}/build/xpack/kadr/kadr.zip
                         ${{ github.workspace }}/build/xpack/kadr/kadr.tar.gz
