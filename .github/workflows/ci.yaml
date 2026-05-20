@@ -24,8 +24,12 @@ jobs:
                 uses: xmake-io/github-action-setup-xmake@v1
                 with:
                     xmake-version: latest
-                    build-cache: true
+                    actions-cache-folder: '.xmake-cache'
+                    actions-cache-key: 'xmake-2137'
                     package-cache: true
+                    package-cache-key: 'xmake-2137'  # NOTE: edit this key to invalidate caches
+                    build-cache: true
+                    build-cache-key: 'xmake-${{ matrix.os }}-${{ matrix.comp }}'
 
             -   name: build
                 run: |
