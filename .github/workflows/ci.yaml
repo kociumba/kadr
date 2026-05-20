@@ -1,0 +1,42 @@
+name: "build"
+
+on:
+    push:
+    pull_request:
+
+jobs:
+    build:
+        name: Build on ${{ matrix.build.os }} with ${{ matrix.build.comp }}
+        runs-on: ${{ matrix.build.os }}
+        strategy:
+            fail-fast: false
+            matrix:
+                build: [
+                    { os: ubuntu-latest, comp: 'clang@llvm-19' },
+                    { os: windows-latest, comp: 'msvc' } #'msvc[vs=2026]' },
+                    { os: macos-latest, comp: 'clang@llvm-19' },
+                ]
+
+        steps:
+            -   name: checkout repository
+                uses: actions/checkout@v4
+
+            -   name: setup xmake
+                uses: xmake-io/github-action-setup-xmake@v1
+                with:
+                    xmake-version: latest
+                    build-cache: true
+                    package-cache: true
+
+            -   name: build
+                run: |
+                    xmake f --yes -m release --toolchain=${{ matrix.build.comp }}
+                    xmake pack
+
+            -   uses: actions/upload-artifact@v4
+                with:
+                    name: kadr_${{ matrix.build.os }}_${{ matrix.build.comp }}
+                    path: |
+                        ${{ github.workspace }}/build/xpack/kadr/kadr.zip
+                        ${{ github.workspace }}/build/xpack/kadr/kadr.tar.gz
+                    if-no-files-found: warn

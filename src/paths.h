@@ -29,7 +29,7 @@ inline void init_paths() {
     sc_path = base / "screenshots";
     shutter_path = base / "assets" / "shutter.wav";
     lock_path = base / "kadr.lock";
-    font_path = base / "assets" / "MonaSans-Regular.ttf";
+    font_path = base / "assets" / "Geist-VariableFont_wght.ttf";
 }
 
 #endif  //KADR_PATHS_H

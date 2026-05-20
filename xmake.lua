@@ -99,4 +99,8 @@ xpack("kadr")
 
     set_bindir("kadr")
     add_targets("kadr")
-    add_installfiles("assets/kadr_icon.png", "assets/shutter.wav", {prefixdir = "kadr/assets"})
+    add_installfiles(
+        "assets/kadr_icon.png",
+        "assets/shutter.wav",
+        "assets/Geist-VariableFont_wght.ttf",
+        {prefixdir = "kadr/assets"})
