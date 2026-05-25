@@ -36,7 +36,7 @@ inline bool set_prtsc_snip(bool enabled) {
         5000,
         &result);
 
-    if (sent == 0) { SDL_Log("failed to send setting change signal: %d", GetLastError()); }
+    if (sent == 0) { SDL_Log("failed to send setting change signal: %lu", GetLastError()); }
 
     return true;
 }

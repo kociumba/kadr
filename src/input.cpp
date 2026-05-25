@@ -3,7 +3,6 @@
 #include <fstream>
 #include <magic_enum/magic_enum_all.hpp>
 #include <optional>
-#include <ranges>
 #include <sstream>
 #include <unordered_set>
 

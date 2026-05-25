@@ -1,11 +1,16 @@
 add_rules("mode.debug", "mode.release")
 -- set_policy("build.progress_style", "multirow")
 add_repositories("k_xmake_repo https://github.com/kociumba/k_xmake_repo.git")
-set_languages("cxx23")
+set_languages("cxxlatest")
 includes("@builtin/xpack")
 
-add_requires("libuiohook @default", {configs = {shared = true}})
-add_requires("imgui v1.92.7", {configs = {opengl3 = true, sdl3 = true, freetype = true}})
+-- for now will have to serve for allowing clangd to work
+if is_mode("debug") and os.getenv("ZED_TERM") then
+    set_toolchains("clang")
+end
+
+add_requires("libuiohook @default", { configs = { shared = true } })
+add_requires("imgui v1.92.7", { configs = { opengl3 = true, sdl3 = true, freetype = true } })
 add_requires(
     "opengl",
     "screen_capture_lite 17.1.2745",
@@ -29,17 +34,17 @@ target("kadr")
 
     add_extrafiles("assets/**")
 
-    if is_plat("windows") and is_mode("release") then 
+    if is_plat("windows") and is_mode("release") then
         add_rules("win.sdk.application")
-        add_ldflags("/ENTRY:mainCRTStartup", {force = true})
+        add_ldflags("/ENTRY:mainCRTStartup", { force = true })
     end
 
-    on_load(function (target)
+    on_load( function (target)
           local name = path.filename(target:targetfile())
           target:add("defines", "KADR_EXEC=\"" .. name .. "\"")
         end)
 
-    after_build(function (target)
+    after_build( function (target)
             local outdir = target:targetdir()
             local srcdir = path.join(os.projectdir(), "assets")
 
@@ -50,11 +55,11 @@ target("kadr")
             end
         end)
 
-    before_build(function (target)
-        local git_hash   = os.iorun("git rev-parse --short HEAD"):trim()
-        local git_count  = os.iorun("git rev-list --count HEAD"):trim()
+    before_build( function (target)
+        local git_hash = os.iorun("git rev-parse --short HEAD"):trim()
+        local git_count = os.iorun("git rev-list --count HEAD"):trim()
         local git_branch = os.iorun("git rev-parse --abbrev-ref HEAD"):trim()
-        local is_dirty   = os.iorun("git status --porcelain"):trim() ~= ""
+        local is_dirty = os.iorun("git status --porcelain"):trim() ~= ""
 
         local version_tag = "0.0.0"
             local tag_result = try
@@ -113,4 +118,4 @@ xpack("kadr")
         "assets/kadr_icon.png",
         "assets/shutter.wav",
         "assets/Geist-VariableFont_wght.ttf",
-        {prefixdir = "kadr/assets"})
+        { prefixdir = "kadr/assets" })

@@ -3,7 +3,7 @@
 
 #include <string>
 #include <unordered_map>
-#include "graphics.h"
+#include "globals.h"
 
 namespace fonts {
 
@@ -61,6 +61,8 @@ inline ImFont* use(const std::string& path = "default", size_t size = 13) {
 
     return f;
 }
+
+inline float scalar() { return cfg.ui_font_size / 18.0f; }
 
 }  // namespace fonts
 

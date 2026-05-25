@@ -1,4 +1,5 @@
 #include "settings_ui.h"
+#include <imgui.h>
 #include <magic_enum_all.hpp>
 #include <ranges>
 #include "auto_run.h"
@@ -66,14 +67,14 @@ void settings_ui(App* app) {
 
     // --- titlebar background ---
     bg->AddRectFilled({0, 0},
-        {win_size.x, TITLE_H},
+        {win_size.x, TITLE_H * fonts::scalar()},
         ImGui::ColorConvertFloat4ToU32(ImGui::GetStyle().Colors[ImGuiCol_MenuBarBg]));
-    bg->AddText({12, (TITLE_H - ImGui::GetTextLineHeight()) * 0.5f},
+    bg->AddText({12, (TITLE_H * fonts::scalar() - ImGui::GetTextLineHeight()) * 0.5f},
         IM_COL32(220, 220, 220, 255),
         "kadr | settings");
 
     ImGui::SetNextWindowPos({0, 0});
-    ImGui::SetNextWindowSize({win_size.x, TITLE_H});
+    ImGui::SetNextWindowSize({win_size.x, TITLE_H * fonts::scalar()}, ImGuiCond_Always);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
     ImGui::Begin("##titlebar",
         nullptr,
@@ -121,20 +122,21 @@ void settings_ui(App* app) {
 #endif
     }
 
-    // close button — top right, fires a clean close without the SC teardown path
-    ImGui::SetCursorPos({win_size.x - TITLE_H, 0});
+    ImGui::SetCursorPos({win_size.x - TITLE_H * fonts::scalar(), 0});
     ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 0, 0, 0));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(196, 43, 28, 255));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(160, 30, 20, 255));
     ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(220, 220, 220, 255));
-    if (ImGui::Button("x", {TITLE_H, TITLE_H})) { app->pending_close = true; }
+    if (ImGui::Button("x", {TITLE_H * fonts::scalar(), TITLE_H * fonts::scalar()})) {
+        app->pending_close = true;
+    }
     ImGui::PopStyleColor(4);
 
     ImGui::End();
     ImGui::PopStyleVar();
 
     // --- settings content ---
-    ImGui::SetNextWindowPos({0, TITLE_H});
+    ImGui::SetNextWindowPos({0, TITLE_H * fonts::scalar()});
     ImGui::SetNextWindowSize({win_size.x, win_size.y - TITLE_H});
     ImGui::SetNextWindowBgAlpha(1.0f);
     ImGui::Begin("##settings_content",
@@ -375,7 +377,7 @@ void settings_ui(App* app) {
                 });
         }
 
-        ImGui::SetNextItemWidth(120.0f);
+        ImGui::SetNextItemWidth(120.0f * fonts::scalar());
         if (ImGui::InputInt("size##font_size", &font_size)) {
             // NOTE: these bounds are completely arbitrary and will probably need to be changed
             if (font_size < 6) font_size = 6;
