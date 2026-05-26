@@ -21,6 +21,7 @@ inline fs::path sc_path;
 inline fs::path shutter_path;
 inline fs::path lock_path;
 inline fs::path font_path;
+inline fs::path log_path;
 
 inline void init_paths() {
     base = base_path();
@@ -30,6 +31,7 @@ inline void init_paths() {
     shutter_path = base / "assets" / "shutter.wav";
     lock_path = base / "kadr.lock";
     font_path = base / "assets" / "Geist-VariableFont_wght.ttf";
+    log_path = base / "kadr.log";
 }
 
 #endif  //KADR_PATHS_H

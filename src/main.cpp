@@ -1,3 +1,4 @@
+#include <SDL3/SDL_log.h>
 #include <SDL3/SDL_misc.h>
 #include <SDL3/SDL_tray.h>
 #include <clip/clip.h>
@@ -7,6 +8,7 @@
 #include <chrono>
 #include <filesystem>
 #include <format>
+#include <fstream>
 #include <print>
 #include <string>
 #include <thread>
@@ -41,6 +43,10 @@ static std::atomic g_open_requested_sc{false};
 static std::atomic g_open_requested_settings{false};
 static std::atomic g_close_requested{false};
 static std::string g_last_screenshot_path;
+
+#if defined(NDEBUG)
+static std::ofstream g_log_file;
+#endif
 
 bool ensure_dir(const std::string& path) {
     std::error_code ec;
@@ -487,6 +493,44 @@ int main(int, char**) {
     }
 
     set_current_thread_name("kadr_main");
+
+#if defined(NDEBUG)
+    auto file_logger = [](void*, int, SDL_LogPriority priority, const char* message) {
+        if (!g_log_file.is_open()) { g_log_file.open(log_path, std::ios::app); }
+        if (!g_log_file.is_open()) return;
+
+        const char* prio_str = "UNKN";
+        switch (priority) {
+            case SDL_LOG_PRIORITY_VERBOSE:
+                prio_str = "VERB";
+                break;
+            case SDL_LOG_PRIORITY_DEBUG:
+                prio_str = "DEBU";
+                break;
+            case SDL_LOG_PRIORITY_INFO:
+                prio_str = "INFO";
+                break;
+            case SDL_LOG_PRIORITY_WARN:
+                prio_str = "WARN";
+                break;
+            case SDL_LOG_PRIORITY_ERROR:
+                prio_str = "ERRO";
+                break;
+            case SDL_LOG_PRIORITY_CRITICAL:
+                prio_str = "CRIT";
+                break;
+        }
+
+        auto now = std::chrono::system_clock::now();
+        g_log_file << std::format("[{:%Y-%m-%d %H:%M:%S}] [{}] {}\n", now, prio_str, message);
+
+        g_log_file.flush();
+    };
+
+    SDL_SetLogOutputFunction(file_logger, nullptr);
+#endif
+
+    SDL_Log("\n\nKadr version: " VERSION_FULL " starting...\n\n");
 
     init_keybinds();
     sound_init();
