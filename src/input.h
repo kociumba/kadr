@@ -18,6 +18,7 @@ enum class Action : uint16_t {
     NONE = 0,
     TAKE_SCREENSHOT,
     SAVE_FULLSCREEN,
+    OPEN_SC_FOLDER,
     OPEN_SETTINGS,
     CLOSE_WINDOW,
     QUIT_KADR,
@@ -35,6 +36,8 @@ inline const char* action_name(Action action) {
             return "close window";
         case Action::SAVE_FULLSCREEN:
             return "save fullscreen";
+        case Action::OPEN_SC_FOLDER:
+            return "open screenshot folder";
         case Action::QUIT_KADR:
             return "quit kadr";
         default:

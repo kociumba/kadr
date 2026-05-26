@@ -1,3 +1,5 @@
+#include <SDL3/SDL_misc.h>
+#include <SDL3/SDL_tray.h>
 #include <clip/clip.h>
 #include <inttypes.h>
 #include <stdio.h>
@@ -61,8 +63,8 @@ bool ensure_dir(const std::string& path) {
 
 static std::string screenshot_path() {
     auto now = std::chrono::system_clock::now();
-    auto now_sec = std::chrono::floor<std::chrono::seconds>(now);
-    auto stamp = std::format("{:%F_%H-%M-%S}", now_sec);
+    // auto now_sec = std::chrono::floor<std::chrono::seconds>(now);
+    auto stamp = std::format("{:%F_%H-%M-%S}", now);
 
     return cfg.save_path + std::format("{}kadr_screenshot_{}.png", sep, stamp);
 }
@@ -105,6 +107,11 @@ static bool copy_surface_to_clipboard(SDL_Surface* surface) {
         SDL_Log("Failed to copy screenshot to clipboard");
     }
     return ok;
+}
+
+void open_sc_path() {
+    SDL_Log("opening: '%s'", cfg.save_path.c_str());
+    SDL_OpenURL(cfg.save_path.c_str());
 }
 
 // TODO: deprecate later, only leave for libuiohook, remove all other usage
@@ -165,6 +172,9 @@ static void uiohook_dispatch(uiohook_event* const event) {
                     SDL_DestroySurface(shot);
                 });
 
+                break;
+            case Action::OPEN_SC_FOLDER:
+                dispatch([] { open_sc_path(); });
                 break;
             case Action::OPEN_SETTINGS:
                 SDL_Log("settings opened\n");
@@ -516,6 +526,10 @@ int main(int, char**) {
             });
         },
         &app);
+
+    SDL_TrayEntry* open_sc_entry =
+        SDL_InsertTrayEntryAt(menu, -1, "Open screenshots folder", SDL_TRAYENTRY_BUTTON);
+    SDL_SetTrayEntryCallback(open_sc_entry, [](void* ud, SDL_TrayEntry*) { open_sc_path(); }, &app);
 
     SDL_TrayEntry* reload_entry =
         SDL_InsertTrayEntryAt(menu, -1, "Reload Settings", SDL_TRAYENTRY_BUTTON);

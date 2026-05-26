@@ -184,7 +184,16 @@ void settings_ui(App* app) {
 
     if (ImGui::BeginTabItem("hotkeys")) {
         ImGui::SeparatorText("BINDINGS");
+
+        std::vector<Action> valid_actions;
         for (auto action : magic_enum::enum_values<Action>()) {
+            if (action != Action::NONE && action != Action::COUNT &&
+                action != Action::CLOSE_WINDOW) {
+                valid_actions.push_back(action);
+            }
+        }
+
+        for (auto [idx, action] : std::views::enumerate(valid_actions)) {
             if (action == Action::NONE || action == Action::COUNT || action == Action::CLOSE_WINDOW)
                 continue;
 
@@ -251,6 +260,8 @@ void settings_ui(App* app) {
             float next_y =
                 row_top_y + std::max(name_h, content_h) + ImGui::GetStyle().ItemSpacing.y;
             ImGui::SetCursorPosY(next_y);
+
+            if (idx != valid_actions.size() - 1) ImGui::Separator();
 
             ImGui::PopID();
         }
