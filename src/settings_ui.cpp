@@ -9,6 +9,7 @@
 #include "hijack.h"
 #include "input.h"
 #include "sound.h"
+#include "ui/duration_input.h"
 #include "ui/file_picker.h"
 #include "ui/timed_trigger.h"
 
@@ -178,6 +179,10 @@ void settings_ui(App* app) {
                 sc_path.string().c_str());
         }
         ImGui::Unindent(12.0f);
+
+        ImGui::SeparatorText("SCREENSHOT BEHAVIOUR");
+        if (duration_input("screenshot timeout", &cfg.sc_timeout)) config_save();
+        // TODO: make sure this loads correctly when reloading cfg
 
         ImGui::EndTabItem();
     }

@@ -166,7 +166,7 @@ static void uiohook_dispatch(uiohook_event* const event) {
                         SDL_WarpMouseGlobal(69420.0f, 69420.0f);
                     }
 
-                    SDL_Surface* shot = Screenshotter().TakeScreenshot();
+                    SDL_Surface* shot = take_screenshot(cfg.sc_timeout);
 
                     if (cfg.hide_cursor) { SDL_WarpMouseGlobal(mx, my); }
 
@@ -460,7 +460,7 @@ static void TransitionToSC(App* app) {
             SDL_WarpMouseGlobal(69420.0f, 69420.0f);
         }
 
-        app->shot = Screenshotter().TakeScreenshot();
+        app->shot = take_screenshot(cfg.sc_timeout);
         app->shot_tex = surface_to_imgui(app->shot);
 
         if (cfg.hide_cursor) { SDL_WarpMouseGlobal(mx, my); }

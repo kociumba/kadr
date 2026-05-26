@@ -50,6 +50,7 @@ struct CFG {
     std::string save_path = sc_path.string();
     bool start_on_login = false;
     SCMode sc_mode = SCMode::Region;
+    size_t sc_timeout = 2000;  // in ms
     bool hide_cursor = false;
     bool hijack_prtsc = false;
     bool play_capture_sound = true;
@@ -63,6 +64,7 @@ struct CFG {
         save_path,
         start_on_login,
         sc_mode,
+        sc_timeout,
         hide_cursor,
         hijack_prtsc,
         play_capture_sound,
