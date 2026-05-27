@@ -12,13 +12,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest, comp: "clang@llvm-21", env: "llvm 21.x" }
-          - { os: windows-latest, comp: "msvc", env: "msvc" }
+          - { os: ubuntu-latest, comp: "gcc", gcc-version: 14 }
+          - { os: windows-latest, comp: "msvc" }
     #           - { os: macos-latest, comp: 'clang@llvm-19' }  # disable macos for now since it seems to hang
 
     steps:
       - name: checkout repository
         uses: actions/checkout@v4
+
+      - name: Install GCC ${{ matrix.gcc-version }}
+        if: matrix.comp == 'gcc'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-${{ matrix.gcc-version }} g++-${{ matrix.gcc-version }}
 
       - name: setup xmake
         uses: xmake-io/github-action-setup-xmake@v1
@@ -31,11 +37,21 @@ jobs:
           # build-cache: true
           # build-cache-key: 'xmake-${{ matrix.os }}-${{ matrix.comp }}'
 
+      - name: Set compiler environment
+        shell: bash
+        run: |
+          if [ "${{ matrix.comp }}" = "gcc" ]; then
+            echo "CC=gcc-${{ matrix.gcc-version }}" >> $GITHUB_ENV
+            echo "CXX=g++-${{ matrix.gcc-version }}" >> $GITHUB_ENV
+          elif [ "${{ matrix.comp }}" = "clang" ]; then
+            echo "CC=clang-${{ matrix.clang-version }}" >> $GITHUB_ENV
+            echo "CXX=clang++-${{ matrix.clang-version }}" >> $GITHUB_ENV
+            echo "LD=lld-${{ matrix.clang-version }}" >> $GITHUB_ENV
+          fi
+
       - name: build
         run: |
           xmake repo -u
-          xrepo install -y "${{ matrix.env }}"
-          xrepo env -b "${{ matrix.env }}" shell
           xmake f --yes -m release --toolchain=${{ matrix.comp }}
           xmake pack
 
