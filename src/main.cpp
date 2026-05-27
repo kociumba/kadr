@@ -730,7 +730,7 @@ int main(int, char**) {
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
-        ImGui::PushFont(fonts::load(cfg.ui_font_path, cfg.ui_font_size), cfg.ui_font_size);
+        ImGui::PushFont(fonts::load(cfg.ui_font_path), cfg.ui_font_size);
 
         if (app.mode == SC) {
             toolbar(&app);

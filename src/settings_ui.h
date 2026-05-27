@@ -85,16 +85,17 @@ static void set_theme_kadr_dark() {
     // Tabs
     colors[ImGuiCol_Tab] = ImVec4(0.24f, 0.22f, 0.21f, 1.00f);
     colors[ImGuiCol_TabHovered] = ImVec4(0.35f, 0.43f, 0.28f, 1.00f);  // green tint on hover
-    colors[ImGuiCol_TabActive] = ImVec4(0.31f, 0.40f, 0.27f, 1.00f);  // active tab has green warmth
-    colors[ImGuiCol_TabUnfocused] = ImVec4(0.20f, 0.19f, 0.18f, 1.00f);
-    colors[ImGuiCol_TabUnfocusedActive] = ImVec4(0.26f, 0.30f, 0.23f, 1.00f);  // faint green
+    colors[ImGuiCol_TabSelected] =
+        ImVec4(0.31f, 0.40f, 0.27f, 1.00f);  // active tab has green warmth
+    colors[ImGuiCol_TabDimmed] = ImVec4(0.20f, 0.19f, 0.18f, 1.00f);
+    colors[ImGuiCol_TabDimmedSelected] = ImVec4(0.26f, 0.30f, 0.23f, 1.00f);  // faint green
     colors[ImGuiCol_TabSelectedOverline] = ImVec4(0.72f, 0.73f, 0.15f, 1.00f);
 
     // Misc
     colors[ImGuiCol_PlotLines] =
         ImVec4(0.98f, 0.74f, 0.18f, 1.00f);  // #fabd2f Yellow (kept, good contrast)
     colors[ImGuiCol_TextSelectedBg] = ImVec4(0.40f, 0.36f, 0.33f, 1.00f);  // #665c54
-    colors[ImGuiCol_NavHighlight] = ImVec4(0.56f, 0.75f, 0.49f, 1.00f);    // Aqua instead of red
+    colors[ImGuiCol_NavCursor] = ImVec4(0.56f, 0.75f, 0.49f, 1.00f);       // Aqua instead of red
 
 #ifdef IMGUI_HAS_DOCK
     colors[ImGuiCol_DockingPreview] = ImVec4(0.72f, 0.73f, 0.15f, 0.50f);

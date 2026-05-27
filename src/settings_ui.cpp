@@ -138,7 +138,7 @@ void settings_ui(App* app) {
 
     // --- settings content ---
     ImGui::SetNextWindowPos({0, TITLE_H * fonts::scalar()});
-    ImGui::SetNextWindowSize({win_size.x, win_size.y - TITLE_H});
+    ImGui::SetNextWindowSize({win_size.x, win_size.y - TITLE_H * fonts::scalar()});
     ImGui::SetNextWindowBgAlpha(1.0f);
     ImGui::Begin("##settings_content",
         nullptr,
@@ -162,7 +162,7 @@ void settings_ui(App* app) {
                 {0.984f, 0.286f, 0.204f, 1.00f}, "You WILL lose all screenshots taken !!!");
         }
 
-        ImGui::SeparatorText("SAVE LOCATION:");
+        ImGui::SeparatorText("SAVE LOCATION");
         ImGui::Indent(12.0f);
         auto r =
             FilePicker::draw("folder:", "##save_folder", &cfg.save_path, 100, "browse...##save");
@@ -480,9 +480,10 @@ void settings_ui(App* app) {
     bool show_copied = timing::trigger(&copied, 1500.0f);
     const char* label = show_copied ? "copied!" : ver;
     ImVec2 text_size = ImGui::CalcTextSize(label);
-    ImVec2 content_max = ImGui::GetWindowContentRegionMax();
-    ImVec2 pos = {
-        content_max.x - text_size.x, content_max.y - ImGui::GetTextLineHeightWithSpacing()};
+    ImVec2 cursor_start = ImGui::GetCursorPos();
+    ImVec2 avail = ImGui::GetContentRegionAvail();
+    ImVec2 pos = {cursor_start.x + avail.x - text_size.x,
+        cursor_start.y + avail.y - ImGui::GetTextLineHeightWithSpacing()};
 
     ImGui::SetCursorPos(pos);
     ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);

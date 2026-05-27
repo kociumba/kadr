@@ -1,7 +1,7 @@
 #ifndef GRAPHICS_H
 #define GRAPHICS_H
 
-#define IMGUI_DEFINE_MATH_OPERATORS
+#define IMGUI_USER_CONFIG "imgui_config.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_opengl.h>

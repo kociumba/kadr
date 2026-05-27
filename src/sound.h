@@ -17,7 +17,12 @@ inline void audio_error(const char* fmt, ...) {
     va_end(args);
 }
 
-inline void clear_sound_cache() { g_sound_cache.clear(); }
+inline void clear_sound_cache() {
+    for (auto& [_, audio] : g_sound_cache) {
+        MIX_DestroyAudio(audio);
+    }
+    g_sound_cache.clear();
+}
 
 inline bool sound_init() {
     if (!MIX_Init()) {
@@ -51,9 +56,6 @@ inline void play_sound_file(const std::string& path) {
 }
 
 inline void sound_quit() {
-    for (auto& [path, audio] : g_sound_cache) {
-        MIX_DestroyAudio(audio);
-    }
     clear_sound_cache();
     if (g_mixer) {
         MIX_DestroyMixer(g_mixer);
