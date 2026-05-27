@@ -12,7 +12,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest, comp: "clang@llvm-21.1.0" }
+          - { os: ubuntu-latest, comp: "clang@llvm-21" }
           - { os: windows-latest, comp: "msvc" }
     #           - { os: macos-latest, comp: 'clang@llvm-19' }  # disable macos for now since it seems to hang
 
