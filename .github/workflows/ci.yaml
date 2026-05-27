@@ -1,44 +1,44 @@
 name: "build"
 
 on:
-    push:
-    pull_request:
+  push:
+  pull_request:
 
 jobs:
-    build:
-        name: Build on ${{ matrix.os }} with ${{ matrix.comp }}
-        runs-on: ${{ matrix.os }}
-        strategy:
-            fail-fast: false
-            matrix:
-                include:
-                    - { os: ubuntu-latest, comp: 'clang@llvm-19' }
-                    - { os: windows-latest, comp: 'msvc' }
-        #           - { os: macos-latest, comp: 'clang@llvm-19' }  # disable macos for now since it seems to hang
+  build:
+    name: Build on ${{ matrix.os }} with ${{ matrix.comp }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, comp: "clang@llvm-19" }
+          - { os: windows-latest, comp: "msvc" }
+    #           - { os: macos-latest, comp: 'clang@llvm-19' }  # disable macos for now since it seems to hang
 
-        steps:
-            -   name: checkout repository
-                uses: actions/checkout@v4
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v4
 
-            -   name: setup xmake
-                uses: xmake-io/github-action-setup-xmake@v1
-                with:
-                    xmake-version: latest
-                    actions-cache-folder: '.xmake-cache'
-                    actions-cache-key: 'xmake-2137'
-                    package-cache: true
-                    package-cache-key: 'xmake-2137'  # NOTE: edit this key to invalidate caches
-                    build-cache: true
-                    build-cache-key: 'xmake-${{ matrix.os }}-${{ matrix.comp }}'
+      - name: setup xmake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: latest
+          # actions-cache-folder: '.xmake-cache'
+          # actions-cache-key: 'xmake-2137'
+          # package-cache: true
+          # package-cache-key: 'xmake-2137'  # NOTE: edit this key to invalidate caches
+          # build-cache: true
+          # build-cache-key: 'xmake-${{ matrix.os }}-${{ matrix.comp }}'
 
-            -   name: build
-                run: |
-                    xmake f --yes -m release --toolchain=${{ matrix.comp }}
-                    xmake pack
+      - name: build
+        run: |
+          xmake f --yes -m release --toolchain=${{ matrix.comp }}
+          xmake pack
 
-            -   uses: actions/upload-artifact@v4
-                with:
-                    name: kadr_${{ matrix.os }}_${{ matrix.comp }}
-                    path: |
-                        ${{ github.workspace }}/build/xpack/kadr
-                    if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kadr_${{ matrix.os }}_${{ matrix.comp }}
+          path: |
+            ${{ github.workspace }}/build/xpack/kadr
+          if-no-files-found: warn
