@@ -12,8 +12,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest, comp: "clang@llvm-21" }
-          - { os: windows-latest, comp: "msvc" }
+          - { os: ubuntu-latest, comp: "clang@llvm-21", env: "llvm 21.x" }
+          - { os: windows-latest, comp: "msvc", env: "msvc" }
     #           - { os: macos-latest, comp: 'clang@llvm-19' }  # disable macos for now since it seems to hang
 
     steps:
@@ -34,7 +34,7 @@ jobs:
       - name: build
         run: |
           xmake repo -u
-          xrepo env -b "${{ matrix.comp }}" shell
+          xrepo env -b "${{ matrix.env }}" shell
           xmake f --yes -m release --toolchain=${{ matrix.comp }}
           xmake pack
 
