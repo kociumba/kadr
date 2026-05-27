@@ -4,7 +4,7 @@ add_repositories("k_xmake_repo https://github.com/kociumba/k_xmake_repo.git")
 set_languages("cxxlatest")
 includes("@builtin/xpack")
 
-add_requires("libuiohook @default", { configs = { shared = true } })
+add_requires("libuiohook 1.2.3", { configs = { shared = true } })
 add_requires("imgui v1.92.7", { configs = { opengl3 = true, sdl3 = true, freetype = true } })
 add_requires(
     "opengl",
