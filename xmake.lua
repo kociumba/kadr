@@ -12,7 +12,7 @@ add_requires(
     "clip v1.15",
     "magic_enum v0.9.7",
     "nlohmann_json v3.12.0",
-    "SDL3_mixer @default")
+    "SDL3_mixer 3.2.2")
 
 target("kadr")
     set_kind("binary")
