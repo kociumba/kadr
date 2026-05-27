@@ -20,11 +20,17 @@ jobs:
       - name: checkout repository
         uses: actions/checkout@v4
 
-      - name: Install GCC ${{ matrix.gcc-version }}
+      - name: install gcc ${{ matrix.gcc-version }}
         if: matrix.comp == 'gcc'
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-${{ matrix.gcc-version }} g++-${{ matrix.gcc-version }}
+
+      - name: install linux deps
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxcb1-dev
 
       - name: setup xmake
         uses: xmake-io/github-action-setup-xmake@v1
