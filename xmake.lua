@@ -12,7 +12,7 @@ add_requires(
     "clip v1.15",
     "magic_enum v0.9.7",
     "nlohmann_json v3.12.0",
-    "SDL3_mixer 3.2.2")
+    "sdl3_mixer 3.2.2")
 
 target("kadr")
     set_kind("binary")
@@ -25,7 +25,7 @@ target("kadr")
         "clip",
         "magic_enum",
         "nlohmann_json",
-        "SDL3_mixer")
+        "sdl3_mixer")
 
     -- for now will have to serve for allowing clangd to work
     if is_mode("debug") and os.getenv("ZED_TERM") then
