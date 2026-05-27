@@ -33,6 +33,7 @@ jobs:
 
       - name: build
         run: |
+          xmake repo -u
           xmake f --yes -m release --toolchain=${{ matrix.comp }}
           xmake pack
 
