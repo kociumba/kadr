@@ -34,6 +34,7 @@ jobs:
       - name: build
         run: |
           xmake repo -u
+          xrepo env -b "${{ matrix.comp }}" shell
           xmake f --yes -m release --toolchain=${{ matrix.comp }}
           xmake pack
 
