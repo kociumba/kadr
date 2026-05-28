@@ -30,7 +30,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxcb1-dev libxcb-xtest0-dev
+          sudo apt-get install -y libxcb1-dev
 
       - name: setup xmake
         uses: xmake-io/github-action-setup-xmake@v1

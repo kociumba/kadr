@@ -5,7 +5,7 @@
 #include "globals.h"
 
 inline std::string get_self_path() {
-    auto path = std::format("{}{}{}", SDL_GetBasePath(), sep, KADR_EXEC);
+    auto path = std::format("{}{}", SDL_GetBasePath(), KADR_EXEC);
     return path;
 }
 
