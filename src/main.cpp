@@ -279,6 +279,28 @@ static bool CreateGLContext(App* app, KadrMode mode) {
         return false;
     }
 
+    // TODO: move this to platform specific module in the windowing code refactor
+#if defined(_WIN32)
+    // NOTE: this should bypass fso on windows, which cases this to be buggy over long running games
+    if (mode == SC) {
+        HWND hwnd = (HWND)SDL_GetPointerProperty(
+            SDL_GetWindowProperties(app->window), SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr);
+
+        if (hwnd) {
+            LONG_PTR exstyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
+            SetWindowLongPtr(hwnd, GWL_EXSTYLE, exstyle | WS_EX_NOACTIVATE);
+
+            SetWindowPos(hwnd,
+                HWND_TOPMOST,
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+        }
+    }
+#endif
+
     app->gl_context = SDL_GL_CreateContext(app->window);
     if (!app->gl_context) {
         SDL_Log("Failed to create GL context: %s", SDL_GetError());
@@ -305,6 +327,8 @@ static bool OpenWindow(App* app, KadrMode mode) {
     }
 
     WindowConfig cfg = GetWindowConfig(mode);
+    int x = SDL_WINDOWPOS_CENTERED, y = SDL_WINDOWPOS_CENTERED;
+    int w = cfg.w, h = cfg.h;
 
     if (cfg.fullscreen_span) {
         int num_displays;
@@ -328,19 +352,38 @@ static bool OpenWindow(App* app, KadrMode mode) {
             app->vd_min_y = min_y;
             SDL_Log("virtual space | x: %d y: %d", app->vd_min_x, app->vd_min_y);
 
-            SDL_SetWindowPosition(app->window, min_x, min_y);
-            SDL_SetWindowSize(app->window, max_x - min_x, max_y - min_y);
+            x = min_x;
+            y = min_y;
+            w = max_x - min_x;
+            h = max_y - min_y;
+
             SDL_free(displays);
-        } else {
-            SDL_SetWindowPosition(app->window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
         }
-    } else {
-        SDL_SetWindowPosition(app->window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
-        SDL_SetWindowSize(app->window, cfg.w, cfg.h);
     }
 
+    SDL_SetWindowPosition(app->window, x, y);
+    SDL_SetWindowSize(app->window, w, h);
+
+#if defined(_WIN32)
+    // NOTE: part 2 of the fso bypass
+    if (mode == SC) {
+        HWND hwnd = (HWND)SDL_GetPointerProperty(
+            SDL_GetWindowProperties(app->window), SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr);
+
+        if (hwnd) {
+            SetWindowPos(
+                hwnd, HWND_TOPMOST, x, y, w, h, SWP_SHOWWINDOW | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+        } else {
+            SDL_ShowWindow(app->window);
+        }
+    } else {
+        SDL_ShowWindow(app->window);
+        SDL_RaiseWindow(app->window);
+    }
+#else
     SDL_ShowWindow(app->window);
     SDL_RaiseWindow(app->window);
+#endif
 
     app->mode = mode;
     if (app->mode == SETTINGS) { make_borderless_resizable(app->window); }
@@ -351,6 +394,23 @@ static bool OpenWindow(App* app, KadrMode mode) {
 
 static void CloseWindow(App* app) {
     if (!app->window) return;
+
+#if defined(_WIN32)
+    // NOTE: part 3 of the fso bypass
+    if (app->mode == SC) {
+        HWND hwnd = (HWND)SDL_GetPointerProperty(
+            SDL_GetWindowProperties(app->window), SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr);
+        if (hwnd) {
+            SetWindowPos(hwnd,
+                HWND_NOTOPMOST,
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_HIDEWINDOW);
+        }
+    }
+#endif
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplSDL3_Shutdown();
